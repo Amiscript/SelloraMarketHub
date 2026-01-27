@@ -5,6 +5,23 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
+import AdminLogin from "./pages/admin/AdminLogin";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import SalesManagement from "./pages/admin/SalesManagement";
+import ClientManagement from "./pages/admin/ClientManagement";
+import PaymentManagement from "./pages/admin/PaymentManagement";
+import ProductManagement from "./pages/admin/ProductManagement";
+import CarouselManagement from "./pages/admin/CarouselManagement";
+import SubAdminManagement from "./pages/admin/SubAdminManagement";
+import ClientLogin from "./pages/client/ClientLogin";
+import ClientRegister from "./pages/client/ClientRegister";
+import ClientDashboard from "./pages/client/ClientDashboard";
+import ClientProducts from "./pages/client/ClientProducts";
+import ClientSales from "./pages/client/ClientSales";
+import ClientPayments from "./pages/client/ClientPayments";
+import ClientSettings from "./pages/client/ClientSettings";
+import ClientCarousel from "./pages/client/ClientCarousel";
+import UserStorefront from "./pages/user/UserStorefront";
 
 const queryClient = new QueryClient();
 
@@ -16,7 +33,32 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+          
+          {/* Admin Routes */}
+          <Route path="/admin/login" element={<AdminLogin />} />
+          <Route path="/admin/dashboard" element={<AdminDashboard />}>
+            <Route path="sales" element={<SalesManagement />} />
+            <Route path="clients" element={<ClientManagement />} />
+            <Route path="payments" element={<PaymentManagement />} />
+            <Route path="products" element={<ProductManagement />} />
+            <Route path="carousel" element={<CarouselManagement />} />
+            <Route path="sub-admins" element={<SubAdminManagement />} />
+          </Route>
+          
+          {/* Client Routes */}
+          <Route path="/client/login" element={<ClientLogin />} />
+          <Route path="/client/register" element={<ClientRegister />} />
+          <Route path="/client/dashboard" element={<ClientDashboard />}>
+            <Route path="products" element={<ClientProducts />} />
+            <Route path="sales" element={<ClientSales />} />
+            <Route path="payments" element={<ClientPayments />} />
+            <Route path="carousel" element={<ClientCarousel />} />
+            <Route path="settings" element={<ClientSettings />} />
+          </Route>
+          
+          {/* User Storefront */}
+          <Route path="/store/:storeSlug" element={<UserStorefront />} />
+          
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
