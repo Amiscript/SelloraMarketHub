@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import StatCard from "@/components/dashboard/StatCard";
+import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -13,21 +14,42 @@ import {
   TrendingUp,
   DollarSign,
   Eye,
+  Wallet,
+  ArrowUpRight,
+  ArrowDownRight,
 } from "lucide-react";
 
 const navItems = [
   { name: "Dashboard", href: "/client/dashboard", icon: LayoutDashboard },
   { name: "My Products", href: "/client/dashboard/products", icon: Package },
-  { name: "Sales", href: "/client/dashboard/sales", icon: ShoppingCart },
+   { name: "Orders", href: "/client/dashboard/orders", icon: ShoppingCart },
+  { name: "Sales", href: "/client/dashboard/sales", icon: TrendingUp },
   { name: "Payments", href: "/client/dashboard/payments", icon: CreditCard },
+  { name: "Wallet", href: "/client/dashboard/wallet", icon: Wallet },
   { name: "Carousel", href: "/client/dashboard/carousel", icon: Image },
   { name: "Settings", href: "/client/dashboard/settings", icon: Settings },
+];
+
+// Add wallet transactions data
+const walletTransactions = [
+  { id: 1, type: "credit", description: "Commission Payment", amount: 125.50, date: "2024-01-15", status: "completed" },
+  { id: 2, type: "debit", description: "Withdrawal", amount: 50.00, date: "2024-01-14", status: "completed" },
+  { id: 3, type: "credit", description: "Sale Commission", amount: 34.99, date: "2024-01-13", status: "completed" },
+  { id: 4, type: "credit", description: "Bonus", amount: 25.00, date: "2024-01-12", status: "pending" },
 ];
 
 const ClientDashboard = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const isMainDashboard = location.pathname === "/client/dashboard";
+
+  // Calculate wallet balance
+  const walletBalance = walletTransactions
+    .filter(t => t.status === "completed")
+    .reduce((acc, transaction) => {
+      return transaction.type === "credit" ? acc + transaction.amount : acc - transaction.amount;
+    }, 0);
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -88,11 +110,56 @@ const ClientDashboard = () => {
                   iconColor="from-warning to-warning/70"
                 />
                 <StatCard
-                  title="Pending Payments"
-                  value="$1,234"
-                  icon={CreditCard}
-                  iconColor="from-accent to-accent/70"
+                  title="Wallet Balance"
+                  value={`$${walletBalance.toFixed(2)}`}
+                  change="+$34.99"
+                  changeType="positive"
+                  icon={Wallet}
+                  iconColor="from-primary to-accent"
                 />
+              </div>
+
+              {/* Wallet Transactions */}
+              <div className="stat-card">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-lg font-display font-semibold">Recent Wallet Transactions</h2>
+                  <Button variant="ghost" size="sm" onClick={() => navigate("/client/dashboard/wallet")}>
+                    View All
+                  </Button>
+                </div>
+                <div className="space-y-3">
+                  {walletTransactions.slice(0, 3).map((transaction) => (
+                    <div key={transaction.id} className="flex items-center justify-between p-3 rounded-lg border border-border/50">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                          transaction.type === "credit" ? "bg-success/10" : "bg-destructive/10"
+                        }`}>
+                          {transaction.type === "credit" ? (
+                            <ArrowUpRight className="w-5 h-5 text-success" />
+                          ) : (
+                            <ArrowDownRight className="w-5 h-5 text-destructive" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-medium">{transaction.description}</p>
+                          <p className="text-xs text-muted-foreground">{transaction.date}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className={`font-bold ${transaction.type === "credit" ? "text-success" : "text-destructive"}`}>
+                          {transaction.type === "credit" ? "+" : "-"}${transaction.amount.toFixed(2)}
+                        </p>
+                        <span className={`text-xs px-2 py-1 rounded-full ${
+                          transaction.status === "completed" 
+                            ? "bg-success/10 text-success" 
+                            : "bg-warning/10 text-warning"
+                        }`}>
+                          {transaction.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               {/* Recent Sales */}

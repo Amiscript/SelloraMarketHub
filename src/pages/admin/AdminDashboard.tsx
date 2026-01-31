@@ -21,6 +21,7 @@ const navItems = [
   { name: "Sales Management", href: "/admin/dashboard/sales", icon: ShoppingCart },
   { name: "Client Management", href: "/admin/dashboard/clients", icon: Users },
   { name: "Payment Management", href: "/admin/dashboard/payments", icon: CreditCard },
+   { name: "Order Tracking", href: "/admin/dashboard/orders", icon: Package },
   { name: "Product Management", href: "/admin/dashboard/products", icon: Package },
   { name: "Carousel Management", href: "/admin/dashboard/carousel", icon: Image },
   { name: "Sub-Admin Management", href: "/admin/dashboard/sub-admins", icon: UserCog },

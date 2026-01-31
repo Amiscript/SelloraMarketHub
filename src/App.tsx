@@ -7,6 +7,7 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminOrders from "./pages/admin/AdminOrders";
 import SalesManagement from "./pages/admin/SalesManagement";
 import ClientManagement from "./pages/admin/ClientManagement";
 import PaymentManagement from "./pages/admin/PaymentManagement";
@@ -21,6 +22,8 @@ import ClientSales from "./pages/client/ClientSales";
 import ClientPayments from "./pages/client/ClientPayments";
 import ClientSettings from "./pages/client/ClientSettings";
 import ClientCarousel from "./pages/client/ClientCarousel";
+import ClientWallet from "./pages/client/ClientWallet";
+import Clientorder from "./pages/client/ClientOrders";
 import UserStorefront from "./pages/user/UserStorefront";
 
 const queryClient = new QueryClient();
@@ -39,6 +42,7 @@ const App = () => (
           <Route path="/admin/dashboard" element={<AdminDashboard />}>
             <Route path="sales" element={<SalesManagement />} />
             <Route path="clients" element={<ClientManagement />} />
+            <Route path="orders" element={<AdminOrders />} />
             <Route path="payments" element={<PaymentManagement />} />
             <Route path="products" element={<ProductManagement />} />
             <Route path="carousel" element={<CarouselManagement />} />
@@ -54,6 +58,8 @@ const App = () => (
             <Route path="payments" element={<ClientPayments />} />
             <Route path="carousel" element={<ClientCarousel />} />
             <Route path="settings" element={<ClientSettings />} />
+            <Route path="wallet" element={<ClientWallet />} />
+            <Route path="orders" element={<Clientorder />} />
           </Route>
           
           {/* User Storefront */}
