@@ -12,10 +12,10 @@ const Footer = () => {
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
                 <ShoppingBag className="w-5 h-5 text-primary-foreground" />
               </div>
-              <span className="text-xl font-display font-bold">MarketHub</span>
+              <span className="text-xl font-display font-bold"> Sellora MarketHub</span>
             </Link>
             <p className="text-background/70 mb-6">
-              The complete e-commerce platform for modern businesses. Manage, sell, and grow with ease.
+              The complete marketplace solution for modern businesses. Manage, sell, and grow with ease.
             </p>
             <div className="flex gap-4">
               {[Facebook, Twitter, Instagram, Linkedin].map((Icon, index) => (

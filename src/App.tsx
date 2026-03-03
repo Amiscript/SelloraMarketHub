@@ -25,6 +25,7 @@ import ClientCarousel from "./pages/client/ClientCarousel";
 import ClientWallet from "./pages/client/ClientWallet";
 import Clientorder from "./pages/client/ClientOrders";
 import UserStorefront from "./pages/user/UserStorefront";
+import ChatLayout from "../src/components/layout/chatLayout";
 
 const queryClient = new QueryClient();
 
@@ -35,11 +36,20 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
+          {/* Public Routes */}
+          <Route path="/" element={
+            <ChatLayout chatType="store" storeName="MarketHub Support">
+              <Index />
+            </ChatLayout>
+          } />
           
           {/* Admin Routes */}
           <Route path="/admin/login" element={<AdminLogin />} />
-          <Route path="/admin/dashboard" element={<AdminDashboard />}>
+          <Route path="/admin/dashboard" element={
+            <ChatLayout chatType="admin">
+              <AdminDashboard />
+            </ChatLayout>
+          }>
             <Route path="sales" element={<SalesManagement />} />
             <Route path="clients" element={<ClientManagement />} />
             <Route path="orders" element={<AdminOrders />} />
@@ -52,7 +62,11 @@ const App = () => (
           {/* Client Routes */}
           <Route path="/client/login" element={<ClientLogin />} />
           <Route path="/client/register" element={<ClientRegister />} />
-          <Route path="/client/dashboard" element={<ClientDashboard />}>
+          <Route path="/client/dashboard" element={
+            <ChatLayout chatType="client">
+              <ClientDashboard />
+            </ChatLayout>
+          }>
             <Route path="products" element={<ClientProducts />} />
             <Route path="sales" element={<ClientSales />} />
             <Route path="payments" element={<ClientPayments />} />
@@ -63,7 +77,14 @@ const App = () => (
           </Route>
           
           {/* User Storefront */}
-          <Route path="/store/:storeSlug" element={<UserStorefront />} />
+          <Route path="/store/:storeSlug" element={
+            <ChatLayout 
+              chatType="store" 
+              storeName={window.location.pathname.split('/')[2] || "Store"}
+            >
+              <UserStorefront />
+            </ChatLayout>
+          } />
           
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -43,7 +43,7 @@ const DashboardSidebar = ({ navItems, isOpen, onClose, title }: DashboardSidebar
                 <ShoppingBag className="w-5 h-5 text-primary-foreground" />
               </div>
               <div>
-                <span className="text-lg font-display font-bold gradient-text">MarketHub</span>
+                <span className="text-lg font-display font-bold gradient-text"> Sellora MarketHub</span>
                 <span className="block text-xs text-muted-foreground">{title}</span>
               </div>
             </Link>
