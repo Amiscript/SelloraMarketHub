@@ -23,9 +23,13 @@ import ClientPayments from "./pages/client/ClientPayments";
 import ClientSettings from "./pages/client/ClientSettings";
 import ClientCarousel from "./pages/client/ClientCarousel";
 import ClientWallet from "./pages/client/ClientWallet";
-import Clientorder from "./pages/client/ClientOrders";
+import ClientOrders from "./pages/client/ClientOrders";
 import UserStorefront from "./pages/user/UserStorefront";
-import ChatLayout from "../src/components/layout/chatLayout";
+import ChatLayout from "./components/layout/chatLayout";
+import ForgotPassword from "@/pages/auth/ForgotPassword";
+import ResetPassword from "@/pages/auth/ResetPassword";
+import VerificationPending from "@/pages/client/VerificationPending";
+import ResendVerification from "@/pages/client/ResendVerification";
 
 const queryClient = new QueryClient();
 
@@ -43,37 +47,104 @@ const App = () => (
             </ChatLayout>
           } />
           
-          {/* Admin Routes */}
-          <Route path="/admin/login" element={<AdminLogin />} />
-          <Route path="/admin/dashboard" element={
-            <ChatLayout chatType="admin">
-              <AdminDashboard />
-            </ChatLayout>
-          }>
-            <Route path="sales" element={<SalesManagement />} />
-            <Route path="clients" element={<ClientManagement />} />
-            <Route path="orders" element={<AdminOrders />} />
-            <Route path="payments" element={<PaymentManagement />} />
-            <Route path="products" element={<ProductManagement />} />
-            <Route path="carousel" element={<CarouselManagement />} />
-            <Route path="sub-admins" element={<SubAdminManagement />} />
+          {/* Auth Routes (Shared) */}
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password/:token" element={<ResetPassword />} />
+          
+          {/* Admin Routes Group */}
+          <Route path="/admin">
+            <Route path="login" element={<AdminLogin />} />
+            <Route path="dashboard" element={
+              <ChatLayout chatType="admin">
+                <AdminDashboard />
+              </ChatLayout>
+            } />
+            <Route path="sales" element={
+              <ChatLayout chatType="admin">
+                <SalesManagement />
+              </ChatLayout>
+            } />
+            <Route path="clients" element={
+              <ChatLayout chatType="admin">
+                <ClientManagement />
+              </ChatLayout>
+            } />
+            <Route path="orders" element={
+              <ChatLayout chatType="admin">
+                <AdminOrders />
+              </ChatLayout>
+            } />
+            <Route path="payments" element={
+              <ChatLayout chatType="admin">
+                <PaymentManagement />
+              </ChatLayout>
+            } />
+            <Route path="products" element={
+              <ChatLayout chatType="admin">
+                <ProductManagement />
+              </ChatLayout>
+            } />
+            <Route path="carousel" element={
+              <ChatLayout chatType="admin">
+                <CarouselManagement />
+              </ChatLayout>
+            } />
+            <Route path="sub-admins" element={
+              <ChatLayout chatType="admin">
+                <SubAdminManagement />
+              </ChatLayout>
+            } />
           </Route>
           
-          {/* Client Routes */}
-          <Route path="/client/login" element={<ClientLogin />} />
-          <Route path="/client/register" element={<ClientRegister />} />
-          <Route path="/client/dashboard" element={
-            <ChatLayout chatType="client">
-              <ClientDashboard />
-            </ChatLayout>
-          }>
-            <Route path="products" element={<ClientProducts />} />
-            <Route path="sales" element={<ClientSales />} />
-            <Route path="payments" element={<ClientPayments />} />
-            <Route path="carousel" element={<ClientCarousel />} />
-            <Route path="settings" element={<ClientSettings />} />
-            <Route path="wallet" element={<ClientWallet />} />
-            <Route path="orders" element={<Clientorder />} />
+          {/* Client Routes Group */}
+          <Route path="/client">
+            {/* Public Client Routes */}
+            <Route path="login" element={<ClientLogin />} />
+            <Route path="register" element={<ClientRegister />} />
+            <Route path="verification-pending" element={<VerificationPending />} />
+            <Route path="resend-verification" element={<ResendVerification />} />
+            
+            {/* Protected Client Routes */}
+            <Route path="dashboard" element={
+              <ChatLayout chatType="client">
+                <ClientDashboard />
+              </ChatLayout>
+            } />
+            <Route path="products" element={
+              <ChatLayout chatType="client">
+                <ClientProducts />
+              </ChatLayout>
+            } />
+            <Route path="sales" element={
+              <ChatLayout chatType="client">
+                <ClientSales />
+              </ChatLayout>
+            } />
+            <Route path="payments" element={
+              <ChatLayout chatType="client">
+                <ClientPayments />
+              </ChatLayout>
+            } />
+            <Route path="carousel" element={
+              <ChatLayout chatType="client">
+                <ClientCarousel />
+              </ChatLayout>
+            } />
+            <Route path="settings" element={
+              <ChatLayout chatType="client">
+                <ClientSettings />
+              </ChatLayout>
+            } />
+            <Route path="wallet" element={
+              <ChatLayout chatType="client">
+                <ClientWallet />
+              </ChatLayout>
+            } />
+            <Route path="orders" element={
+              <ChatLayout chatType="client">
+                <ClientOrders />
+              </ChatLayout>
+            } />
           </Route>
           
           {/* User Storefront */}
@@ -86,6 +157,7 @@ const App = () => (
             </ChatLayout>
           } />
           
+          {/* 404 Route */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

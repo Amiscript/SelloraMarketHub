@@ -1,24 +1,52 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ShoppingBag, Mail, Lock, ArrowRight, Store } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/store/hooks/useAuth";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const ClientLogin = () => {
   const navigate = useNavigate();
+  const { login, isLoading, error, clearError, isAuthenticated } = useAuth();
   const [formData, setFormData] = useState({ email: "", password: "" });
-  const [isLoading, setIsLoading] = useState(false);
+  const [showError, setShowError] = useState(false);
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate("/client/dashboard");
+    }
+  }, [isAuthenticated, navigate]);
+
+  // Show error toast when error occurs
+  useEffect(() => {
+    if (error && !showError) {
+      toast({
+        title: "Login Failed",
+        description: error,
+        variant: "destructive",
+      });
+      clearError();
+      setShowError(true);
+      setTimeout(() => setShowError(false), 3000);
+    }
+  }, [error, clearError, showError]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    setShowError(false);
     
-    setTimeout(() => {
-      setIsLoading(false);
-      toast({ title: "Login Successful", description: "Welcome back!" });
-      navigate("/client/dashboard");
-    }, 1000);
+    try {
+      await login({ email: formData.email, password: formData.password }, 'client');
+      toast({ 
+        title: "Login Successful", 
+        description: "Welcome back!" 
+      });
+    } catch (error) {
+      // Error is handled by the store and useEffect above
+    }
   };
 
   return (
@@ -68,6 +96,12 @@ const ClientLogin = () => {
             </p>
           </div>
 
+          {error && (
+            <Alert variant="destructive" className="mb-6">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="block text-sm font-medium mb-2">Email Address</label>
@@ -80,6 +114,7 @@ const ClientLogin = () => {
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   required
+                  disabled={isLoading}
                 />
               </div>
             </div>
@@ -95,6 +130,7 @@ const ClientLogin = () => {
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   required
+                  disabled={isLoading}
                 />
               </div>
             </div>
@@ -104,13 +140,26 @@ const ClientLogin = () => {
                 <input type="checkbox" className="rounded border-border" />
                 <span className="text-sm text-muted-foreground">Remember me</span>
               </label>
-              <a href="#" className="text-sm text-primary hover:underline">
+              <Link 
+                to="/forgot-password" 
+                state={{ from: '/client/login' }}
+                className="text-sm text-primary hover:underline"
+              >
                 Forgot password?
-              </a>
+              </Link>
             </div>
 
             <Button variant="hero" size="lg" className="w-full" disabled={isLoading}>
-              {isLoading ? "Signing in..." : "Sign In"} <ArrowRight className="w-4 h-4" />
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin mr-2" />
+                  Signing in...
+                </>
+              ) : (
+                <>
+                  Sign In <ArrowRight className="w-4 h-4" />
+                </>
+              )}
             </Button>
           </form>
 
