@@ -1,51 +1,27 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ShoppingBag, Mail, Lock, ArrowRight, Shield } from "lucide-react";
+import { ShoppingBag, Mail, Lock, ArrowRight, Shield, Eye, EyeOff } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { useAuth } from "@/store/hooks/useAuth";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useAuthStore } from "@/store/auth.store";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
-  const { login, isLoading, error, clearError, isAuthenticated } = useAuth();
+  const { login, isLoading, error, clearError } = useAuthStore();
   const [formData, setFormData] = useState({ email: "", password: "" });
-  const [showError, setShowError] = useState(false);
-
-  // Redirect if already authenticated
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate("/admin/dashboard");
-    }
-  }, [isAuthenticated, navigate]);
-
-  // Show error toast when error occurs
-  useEffect(() => {
-    if (error && !showError) {
-      toast({
-        title: "Login Failed",
-        description: error,
-        variant: "destructive",
-      });
-      clearError();
-      setShowError(true);
-      setTimeout(() => setShowError(false), 3000);
-    }
-  }, [error, clearError, showError]);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setShowError(false);
-    
+    clearError();
+
     try {
-      await login({ email: formData.email, password: formData.password }, 'admin');
-      toast({ 
-        title: "Login Successful", 
-        description: "Welcome back, Admin!" 
-      });
-    } catch (error) {
-      // Error is handled by the store and useEffect above
+      await login({ email: formData.email, password: formData.password }, "admin");
+      toast({ title: "Login Successful", description: "Welcome back, Admin!" });
+      navigate("/admin/dashboard");
+    } catch {
+      // error shown below via store state
     }
   };
 
@@ -97,9 +73,9 @@ const AdminLogin = () => {
           </div>
 
           {error && (
-            <Alert variant="destructive" className="mb-6">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
+            <div className="mb-6 p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+              {error}
+            </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -124,32 +100,39 @@ const AdminLogin = () => {
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   placeholder="••••••••"
-                  className="pl-10 h-12"
+                  className="pl-10 pr-10 h-12"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   required
                   disabled={isLoading}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 
             <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2">
+              <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" className="rounded border-border" />
                 <span className="text-sm text-muted-foreground">Remember me</span>
               </label>
-              <Link 
-                to="/forgot-password" 
-                state={{ from: '/admin/login' }}
+              <Link
+                to="/forgot-password"
+                state={{ from: "/admin/login" }}
                 className="text-sm text-primary hover:underline"
               >
                 Forgot password?
               </Link>
             </div>
 
-            <Button variant="hero" size="lg" className="w-full" disabled={isLoading}>
+            <Button variant="hero" size="lg" className="w-full" type="submit" disabled={isLoading}>
               {isLoading ? (
                 <>
                   <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin mr-2" />

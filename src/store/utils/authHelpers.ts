@@ -71,8 +71,7 @@ export const authHelpers = {
     const storeSlug = slug || useAuthStore.getState().user?.storeSlug;
     if (!storeSlug) return '';
     
-    const baseUrl = import.meta.env.VITE_CLIENT_URL || 'https://sellora-backend.onrender.com';
-    return `${baseUrl}/store/${storeSlug}`;
+    return `/store/${storeSlug}`;
   },
 
   // Get store dashboard URL

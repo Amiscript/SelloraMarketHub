@@ -207,7 +207,7 @@ export const useStoreUrl = () => {
   
   if (storeUrl) return storeUrl;
   if (storeSlug) {
-    return `${import.meta.env.VITE_CLIENT_URL || 'https://sellora-backend.onrender.com'}/store/${storeSlug}`;
+    return `/store/${storeSlug}`;
   }
   return null;
 };

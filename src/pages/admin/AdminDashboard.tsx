@@ -1,162 +1,202 @@
-import { useState } from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import StatCard from "@/components/dashboard/StatCard";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
-  LayoutDashboard,
-  ShoppingCart,
-  Users,
-  CreditCard,
-  Package,
-  Image,
-  UserCog,
-  TrendingUp,
-  DollarSign,
-  UserCheck,
+  LayoutDashboard, ShoppingCart, Users, CreditCard,
+  Package, Image, UserCog, TrendingUp, DollarSign,
+  UserCheck, BarChart2, RefreshCw,
 } from "lucide-react";
+import { useDashboardStore } from "@/store/dashboard.store";
+import { useAuthStore } from "@/store/auth.store";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, PieChart, Pie, Cell,
+} from "recharts";
 
 const navItems = [
   { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
-  { name: "Sales Management", href: "/admin/dashboard/sales", icon: ShoppingCart },
-  { name: "Client Management", href: "/admin/dashboard/clients", icon: Users },
-  { name: "Payment Management", href: "/admin/dashboard/payments", icon: CreditCard },
-   { name: "Order Tracking", href: "/admin/dashboard/orders", icon: Package },
-  { name: "Product Management", href: "/admin/dashboard/products", icon: Package },
-  { name: "Carousel Management", href: "/admin/dashboard/carousel", icon: Image },
-  { name: "Sub-Admin Management", href: "/admin/dashboard/sub-admins", icon: UserCog },
+  { name: "Sales Management", href: "/admin/sales", icon: ShoppingCart },
+  { name: "Client Management", href: "/admin/clients", icon: Users },
+  { name: "Payment Management", href: "/admin/payments", icon: CreditCard },
+  { name: "Order Tracking", href: "/admin/orders", icon: Package },
+  { name: "Product Management", href: "/admin/products", icon: Package },
+  { name: "Carousel Management", href: "/admin/carousel", icon: Image },
+  { name: "Sub-Admin Management", href: "/admin/sub-admins", icon: UserCog },
 ];
+
+const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const PIE_COLORS = ["#6366f1","#8b5cf6","#a78bfa","#c4b5fd","#ddd6fe","#ede9fe"];
+
+const fmt = (n: number) =>
+  new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(n);
 
 const AdminDashboard = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const location = useLocation();
-  const isMainDashboard = location.pathname === "/admin/dashboard";
+  const { adminStats, adminRecentSales, adminCharts, isLoadingAdmin, fetchAdminDashboard } = useDashboardStore();
+  const { user } = useAuthStore();
+  const navigate = useNavigate();
+
+  useEffect(() => { fetchAdminDashboard(); }, []);
+
+  const chartData = (adminCharts?.monthlyRevenue ?? []).map((m) => ({
+    month: MONTH_NAMES[(m._id.month || 1) - 1],
+    revenue: m.revenue,
+    orders: m.orders,
+  }));
+  const pieData = (adminCharts?.productCategories ?? []).map((c) => ({ name: c._id, value: c.count }));
 
   return (
     <div className="min-h-screen bg-background flex">
-      <DashboardSidebar
-        navItems={navItems}
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-        title="Admin Panel"
-      />
-
+      <DashboardSidebar navItems={navItems} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} title="Admin Panel" />
       <div className="flex-1 flex flex-col min-h-screen">
-        <DashboardHeader onMenuClick={() => setSidebarOpen(true)} userName="Super Admin" />
+        <DashboardHeader onMenuClick={() => setSidebarOpen(true)} userName={user?.name || "Admin"} />
+        <main className="flex-1 p-4 lg:p-6 space-y-6">
 
-        <main className="flex-1 p-4 lg:p-6">
-          {isMainDashboard ? (
-            <div className="space-y-6">
-              {/* Welcome Section */}
-              <div>
-                <h1 className="text-2xl font-display font-bold mb-1">Welcome back, Admin!</h1>
-                <p className="text-muted-foreground">Here's what's happening with your marketplace today.</p>
-              </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-display font-bold mb-1">Welcome back, {user?.name || "Admin"}!</h1>
+              <p className="text-muted-foreground">Here's what's happening with your marketplace today.</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={fetchAdminDashboard} disabled={isLoadingAdmin}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${isLoadingAdmin ? "animate-spin" : ""}`} /> Refresh
+            </Button>
+          </div>
 
-              {/* Stats Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard
-                  title="Active Clients"
-                  value="1,234"
-                  change="+12%"
-                  changeType="positive"
-                  icon={Users}
-                  iconColor="from-primary to-primary/70"
-                />
-                <StatCard
-                  title="Total Products"
-                  value="5,678"
-                  change="+8%"
-                  changeType="positive"
-                  icon={Package}
-                  iconColor="from-accent to-accent/70"
-                />
-                <StatCard
-                  title="Total Sales"
-                  value="12,456"
-                  change="+23%"
-                  changeType="positive"
-                  icon={TrendingUp}
-                  iconColor="from-success to-success/70"
-                />
-                <StatCard
-                  title="Total Revenue"
-                  value="$234,567"
-                  change="+18%"
-                  changeType="positive"
-                  icon={DollarSign}
-                  iconColor="from-warning to-warning/70"
-                />
-              </div>
-
-              {/* Secondary Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <StatCard
-                  title="Verified Clients"
-                  value="892"
-                  icon={UserCheck}
-                  iconColor="from-success to-success/70"
-                />
-                <StatCard
-                  title="Pending Payments"
-                  value="$12,345"
-                  icon={CreditCard}
-                  iconColor="from-warning to-warning/70"
-                />
-                <StatCard
-                  title="Sub Admins"
-                  value="8"
-                  icon={UserCog}
-                  iconColor="from-accent to-accent/70"
-                />
-              </div>
-
-              {/* Recent Activity Table */}
-              <div className="stat-card">
-                <h2 className="text-lg font-display font-semibold mb-4">Recent Sales</h2>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Product</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Client</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Customer</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Amount</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[
-                        { product: "Premium Widget", client: "Store A", customer: "John Doe", amount: "$129.99", status: "Delivered" },
-                        { product: "Basic Bundle", client: "Store B", customer: "Jane Smith", amount: "$79.99", status: "Shipped" },
-                        { product: "Pro Package", client: "Store C", customer: "Bob Wilson", amount: "$199.99", status: "Processing" },
-                        { product: "Starter Kit", client: "Store D", customer: "Alice Brown", amount: "$49.99", status: "Delivered" },
-                        { product: "Enterprise Suite", client: "Store E", customer: "Charlie Davis", amount: "$299.99", status: "Shipped" },
-                      ].map((sale, index) => (
-                        <tr key={index} className="table-row-hover border-b border-border/50 last:border-0">
-                          <td className="py-3 px-4 font-medium">{sale.product}</td>
-                          <td className="py-3 px-4 text-muted-foreground">{sale.client}</td>
-                          <td className="py-3 px-4 text-muted-foreground">{sale.customer}</td>
-                          <td className="py-3 px-4 font-medium">{sale.amount}</td>
-                          <td className="py-3 px-4">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              sale.status === "Delivered" ? "bg-success/10 text-success" :
-                              sale.status === "Shipped" ? "bg-primary/10 text-primary" :
-                              "bg-warning/10 text-warning"
-                            }`}>
-                              {sale.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+          {isLoadingAdmin ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}
             </div>
           ) : (
-            <Outlet />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatCard title="Active Clients" value={adminStats?.activeClients.value?.toLocaleString() ?? "0"} change={`${adminStats?.activeClients.change ?? 0}%`} changeType={adminStats?.activeClients.changeType ?? "positive"} icon={Users} iconColor="from-primary to-primary/70" />
+              <StatCard title="Total Products" value={adminStats?.totalProducts.value?.toLocaleString() ?? "0"} change={`${adminStats?.totalProducts.change ?? 0}%`} changeType={adminStats?.totalProducts.changeType ?? "positive"} icon={Package} iconColor="from-accent to-accent/70" />
+              <StatCard title="Total Sales" value={adminStats?.totalSales.value?.toLocaleString() ?? "0"} change={`${adminStats?.totalSales.change ?? 0}%`} changeType={adminStats?.totalSales.changeType ?? "positive"} icon={TrendingUp} iconColor="from-success to-success/70" />
+              <StatCard title="Total Revenue" value={fmt(adminStats?.totalRevenue.value ?? 0)} change={`${adminStats?.totalRevenue.change ?? 0}%`} changeType={adminStats?.totalRevenue.changeType ?? "positive"} icon={DollarSign} iconColor="from-warning to-warning/70" />
+            </div>
           )}
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="stat-card flex items-center gap-4">
+              <div className="p-3 rounded-lg bg-primary/10"><UserCheck className="w-6 h-6 text-primary" /></div>
+              <div><p className="text-sm text-muted-foreground">Verified Clients</p><p className="text-2xl font-bold">{adminStats?.verifiedClients.value?.toLocaleString() ?? "—"}</p></div>
+            </div>
+            <div className="stat-card flex items-center gap-4">
+              <div className="p-3 rounded-lg bg-warning/10"><CreditCard className="w-6 h-6 text-warning" /></div>
+              <div><p className="text-sm text-muted-foreground">Pending Payouts</p><p className="text-2xl font-bold">{fmt(adminStats?.pendingPayments.value ?? 0)}</p></div>
+            </div>
+            <div className="stat-card flex items-center gap-4">
+              <div className="p-3 rounded-lg bg-accent/10"><UserCog className="w-6 h-6 text-accent" /></div>
+              <div><p className="text-sm text-muted-foreground">Active Sub-Admins</p><p className="text-2xl font-bold">{adminStats?.subAdmins.value ?? "—"}</p></div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="stat-card lg:col-span-2">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold flex items-center gap-2"><BarChart2 className="w-5 h-5 text-primary" /> Monthly Revenue</h2>
+              </div>
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={220}>
+                  <AreaChart data={chartData}>
+                    <defs>
+                      <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `₦${(v / 1000).toFixed(0)}k`} />
+                    <Tooltip formatter={(v: number) => fmt(v)} />
+                    <Area type="monotone" dataKey="revenue" stroke="#6366f1" fill="url(#colorRev)" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-[220px] flex items-center justify-center text-muted-foreground text-sm">No revenue data yet</div>
+              )}
+            </div>
+
+            <div className="stat-card">
+              <h2 className="font-semibold mb-4">Product Categories</h2>
+              {pieData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={220}>
+                  <PieChart>
+                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value">
+                      {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-[220px] flex items-center justify-center text-muted-foreground text-sm">No data yet</div>
+              )}
+              <div className="mt-2 flex flex-col gap-1">
+                {pieData.map((d, i) => (
+                  <div key={d.name} className="flex items-center gap-2 text-xs">
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
+                    <span className="text-muted-foreground truncate">{d.name}</span>
+                    <span className="ml-auto font-medium">{d.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="stat-card">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold">Recent Sales</h2>
+                <Button variant="ghost" size="sm" onClick={() => navigate("/admin/sales")}>View all</Button>
+              </div>
+              {adminRecentSales.length === 0 ? (
+                <p className="text-muted-foreground text-sm text-center py-6">No recent sales</p>
+              ) : (
+                <div className="space-y-3">
+                  {adminRecentSales.map((sale) => (
+                    <div key={sale._id} className="flex items-center justify-between p-3 rounded-lg bg-muted/40">
+                      <div>
+                        <p className="font-medium text-sm">{sale.orderId}</p>
+                        <p className="text-xs text-muted-foreground">{sale.customer?.name}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-semibold text-sm">{fmt(sale.payment?.amount ?? 0)}</p>
+                        <Badge variant="secondary" className="text-xs capitalize">{sale.status}</Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="stat-card">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold">Top Clients</h2>
+                <Button variant="ghost" size="sm" onClick={() => navigate("/admin/clients")}>View all</Button>
+              </div>
+              {(adminCharts?.topClients ?? []).length === 0 ? (
+                <p className="text-muted-foreground text-sm text-center py-6">No data yet</p>
+              ) : (
+                <div className="space-y-3">
+                  {(adminCharts?.topClients ?? []).map((client, i) => (
+                    <div key={client._id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/40">
+                      <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">{i + 1}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{client.name}</p>
+                        <p className="text-xs text-muted-foreground">{client.orderCount} orders</p>
+                      </div>
+                      <p className="font-semibold text-sm">{fmt(client.totalSpent)}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
         </main>
       </div>
     </div>

@@ -237,7 +237,7 @@ export const useAuthStore = create<AuthState>()(
               user,
               isAuthenticated: true,
               storeUrl: user.storeSlug 
-                ? `${import.meta.env.VITE_CLIENT_URL || 'https://sellora-backend.onrender.com'}/store/${user.storeSlug}`
+                ? `/store/${user.storeSlug}`
                 : null,
             });
           } catch (error) {
@@ -253,7 +253,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null, validationErrors: null });
         
         try {
-          const response = await api.post<LoginResponse>('/auth/login', credentials);
+          const response = await api.post<LoginResponse>('/api/v1/auth/login', credentials);
           
           if (response.data.success && response.data.token && response.data.user) {
             const { token, user } = response.data;
@@ -278,7 +278,7 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: true,
               isLoading: false,
               storeUrl: user.storeSlug 
-                ? `${import.meta.env.VITE_CLIENT_URL || 'https://sellora-backend.onrender.com'}/store/${user.storeSlug}`
+                ? `/store/${user.storeSlug}`
                 : null,
             });
           } else {
@@ -338,7 +338,7 @@ export const useAuthStore = create<AuthState>()(
             });
           }
 
-          const response = await api.post<RegisterResponse>('/auth/register/client', formData, {
+          const response = await api.post<RegisterResponse>('/api/v1/auth/register/client', formData, {
             headers: {
               'Content-Type': 'multipart/form-data',
             },
@@ -356,7 +356,7 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: true,
               isLoading: false,
               storeUrl: storeUrl || (user.storeSlug 
-                ? `${import.meta.env.VITE_CLIENT_URL || 'https://sellora-backend.onrender.com'}/store/${user.storeSlug}`
+                ? `/store/${user.storeSlug}`
                 : null),
             });
 
@@ -421,7 +421,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         
         try {
-          const response = await api.get<VerifyEmailResponse>(`/auth/verify-email/${token}`);
+          const response = await api.get<VerifyEmailResponse>(`/api/v1/auth/verify-email/${token}`);
           
           if (response.data.success) {
             // Update user verification status in state if logged in
@@ -456,7 +456,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         
         try {
-          const response = await api.post<ForgotPasswordResponse>('/auth/forgot-password', { email });
+          const response = await api.post<ForgotPasswordResponse>('/api/v1/auth/forgot-password', { email });
           
           if (!response.data.success) {
             throw new Error(response.data.error || 'Failed to send reset email');
@@ -482,7 +482,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         
         try {
-          const response = await api.post<ResetPasswordResponse>(`/auth/reset-password/${token}`, { password });
+          const response = await api.post<ResetPasswordResponse>(`/api/v1/auth/reset-password/${token}`, { password });
           
           if (!response.data.success) {
             throw new Error(response.data.error || 'Failed to reset password');
@@ -519,7 +519,7 @@ export const useAuthStore = create<AuthState>()(
               isAuthenticated: true,
               isLoading: false,
               storeUrl: user.storeSlug 
-                ? `${import.meta.env.VITE_CLIENT_URL || 'http://localhost:3000'}/store/${user.storeSlug}`
+                ? `/store/${user.storeSlug}`
                 : null,
             });
           } else {
@@ -576,7 +576,7 @@ export const useAuthStore = create<AuthState>()(
             });
           }
 
-          const response = await api.patch<UpdateProfileResponse>('/auth/update-profile', formData, {
+          const response = await api.patch<UpdateProfileResponse>('/api/v1/auth/update-profile', formData, {
             headers: {
               'Content-Type': 'multipart/form-data',
             },
@@ -590,7 +590,7 @@ export const useAuthStore = create<AuthState>()(
               user: updatedUser,
               isLoading: false,
               storeUrl: updatedUser.storeSlug 
-                ? `${import.meta.env.VITE_CLIENT_URL || 'https://sellora-backend.onrender.com'}/store/${updatedUser.storeSlug}`
+                ? `/store/${updatedUser.storeSlug}`
                 : null,
             });
           } else {
@@ -634,7 +634,6 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         token: state.token,
         user: state.user,
-        isAuthenticated: state.isAuthenticated,
         storeUrl: state.storeUrl,
       }),
     }

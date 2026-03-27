@@ -1,242 +1,244 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, DollarSign, Clock, CheckCircle, Users, MoreHorizontal, Check, X } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Search, DollarSign, Clock, CheckCircle, XCircle, RefreshCw, ChevronLeft, ChevronRight, Check, X } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import StatCard from "@/components/dashboard/StatCard";
+import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
+import DashboardHeader from "@/components/dashboard/DashboardHeader";
+import { usePaymentStore, Payment } from "@/store/payment.store";
+import { useAuthStore } from "@/store/auth.store";
+import { LayoutDashboard, ShoppingCart, Users, CreditCard, Package, Image, UserCog } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const paymentsData = [
-  { id: 1, client: "Store A", product: "Premium Widget", commission: "$12.99", amount: "$129.99", date: "2024-01-15", bank: "Chase ****4567", status: "pending" },
-  { id: 2, client: "Store B", product: "Basic Bundle", commission: "$7.99", amount: "$79.99", date: "2024-01-14", bank: "Wells Fargo ****1234", status: "approved" },
-  { id: 3, client: "Store C", product: "Pro Package", commission: "$19.99", amount: "$199.99", date: "2024-01-13", bank: "BOA ****7890", status: "pending" },
-  { id: 4, client: "Store D", product: "Starter Kit", commission: "$4.99", amount: "$49.99", date: "2024-01-12", bank: "Citi ****5678", status: "rejected" },
-  { id: 5, client: "Store E", product: "Enterprise Suite", commission: "$29.99", amount: "$299.99", date: "2024-01-11", bank: "Chase ****9012", status: "approved" },
+const navItems = [
+  { name: "Dashboard", href: "/admin/dashboard", icon: LayoutDashboard },
+  { name: "Sales Management", href: "/admin/sales", icon: ShoppingCart },
+  { name: "Client Management", href: "/admin/clients", icon: Users },
+  { name: "Payment Management", href: "/admin/payments", icon: CreditCard },
+  { name: "Order Tracking", href: "/admin/orders", icon: Package },
+  { name: "Product Management", href: "/admin/products", icon: Package },
+  { name: "Carousel Management", href: "/admin/carousel", icon: Image },
+  { name: "Sub-Admin Management", href: "/admin/sub-admins", icon: UserCog },
 ];
 
+const statusColors: Record<string, string> = {
+  pending: "bg-warning/10 text-warning border-warning/20",
+  approved: "bg-blue-500/10 text-blue-500 border-blue-500/20",
+  paid: "bg-success/10 text-success border-success/20",
+  rejected: "bg-destructive/10 text-destructive border-destructive/20",
+};
+
+const fmt = (n: number) =>
+  new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(n);
+
 const PaymentManagement = () => {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [showApproveDialog, setShowApproveDialog] = useState(false);
-  const [showRejectDialog, setShowRejectDialog] = useState(false);
-  const [selectedPayment, setSelectedPayment] = useState<typeof paymentsData[0] | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [approveTarget, setApproveTarget] = useState<Payment | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<Payment | null>(null);
   const [rejectReason, setRejectReason] = useState("");
 
-  const filteredPayments = paymentsData.filter(
-    (payment) =>
-      payment.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      payment.product.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const { payments, total, totalPages, currentPage, isLoading, isSubmitting, fetchPayments, approvePayment, rejectPayment, processPayment } = usePaymentStore();
+  const { user } = useAuthStore();
 
-  const handleApprove = () => {
-    toast({
-      title: "Payment Approved",
-      description: `Payment for ${selectedPayment?.client} has been approved and email sent.`,
-    });
-    setShowApproveDialog(false);
-    setSelectedPayment(null);
+  const load = useCallback(() => {
+    fetchPayments({ page, limit: 10, search: search || undefined, status: statusFilter !== "all" ? statusFilter : undefined });
+  }, [page, search, statusFilter]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const pendingPayments = payments.filter(p => p.status === "pending");
+  const approvedPayments = payments.filter(p => p.status === "approved");
+  const paidPayments = payments.filter(p => p.status === "paid");
+  const totalPending = pendingPayments.reduce((sum, p) => sum + p.amount, 0);
+
+  const handleApprove = async () => {
+    if (!approveTarget) return;
+    try {
+      await approvePayment(approveTarget._id);
+      toast({ title: "Payment Approved", description: `Payment has been approved successfully.` });
+      setApproveTarget(null);
+    } catch {
+      toast({ title: "Error", description: "Failed to approve payment", variant: "destructive" });
+    }
   };
 
-  const handleReject = () => {
-    toast({
-      title: "Payment Rejected",
-      description: `Payment for ${selectedPayment?.client} has been rejected. Reason sent via email.`,
-      variant: "destructive",
-    });
-    setShowRejectDialog(false);
-    setSelectedPayment(null);
-    setRejectReason("");
+  const handleReject = async () => {
+    if (!rejectTarget || !rejectReason.trim()) return;
+    try {
+      await rejectPayment(rejectTarget._id, rejectReason);
+      toast({ title: "Payment Rejected", description: "Payment has been rejected and client notified.", variant: "destructive" });
+      setRejectTarget(null);
+      setRejectReason("");
+    } catch {
+      toast({ title: "Error", description: "Failed to reject payment", variant: "destructive" });
+    }
   };
 
-  const getStatusBadge = (status: string) => {
-    const styles = {
-      approved: "bg-success/10 text-success",
-      pending: "bg-warning/10 text-warning",
-      rejected: "bg-destructive/10 text-destructive",
-    };
-    return styles[status as keyof typeof styles] || styles.pending;
+  const handleProcess = async (payment: Payment) => {
+    try {
+      await processPayment(payment._id);
+      toast({ title: "Payment Processed", description: "Payment has been processed and transferred." });
+    } catch {
+      toast({ title: "Error", description: "Failed to process payment", variant: "destructive" });
+    }
   };
+
+  const clientName = (p: Payment) =>
+    typeof p.client === "object" ? (p.client as any).storeName || (p.client as any).name : "—";
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-display font-bold mb-1">Payment Management</h1>
-        <p className="text-muted-foreground">Manage client commissions and payouts</p>
+    <div className="min-h-screen bg-background flex">
+      <DashboardSidebar navItems={navItems} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} title="Admin Panel" />
+      <div className="flex-1 flex flex-col min-h-screen">
+        <DashboardHeader onMenuClick={() => setSidebarOpen(true)} userName={user?.name || "Admin"} />
+        <main className="flex-1 p-4 lg:p-6 space-y-6">
+
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-display font-bold mb-1">Payment Management</h1>
+              <p className="text-muted-foreground">Manage client commission payouts</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={load} disabled={isLoading}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`} /> Refresh
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <StatCard title="Total Pending" value={fmt(totalPending)} icon={Clock} iconColor="from-warning to-warning/70" />
+            <StatCard title="Pending Count" value={String(pendingPayments.length)} icon={DollarSign} iconColor="from-primary to-primary/70" />
+            <StatCard title="Approved" value={String(approvedPayments.length)} icon={CheckCircle} iconColor="from-blue-500 to-blue-500/70" />
+            <StatCard title="Paid Out" value={String(paidPayments.length)} icon={CheckCircle} iconColor="from-success to-success/70" />
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input placeholder="Search payments…" className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+            </div>
+            <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
+              <SelectTrigger className="w-44"><SelectValue placeholder="All Statuses" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                {["pending","approved","paid","rejected"].map(s => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="stat-card overflow-hidden p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b bg-muted/40">
+                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">Client</th>
+                    <th className="text-left p-4 text-sm font-medium text-muted-foreground hidden md:table-cell">Description</th>
+                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">Amount</th>
+                    <th className="text-left p-4 text-sm font-medium text-muted-foreground">Status</th>
+                    <th className="text-left p-4 text-sm font-medium text-muted-foreground hidden lg:table-cell">Bank</th>
+                    <th className="text-right p-4 text-sm font-medium text-muted-foreground">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {isLoading ? (
+                    [...Array(5)].map((_, i) => (
+                      <tr key={i} className="border-b">
+                        {[...Array(6)].map((_, j) => <td key={j} className="p-4"><Skeleton className="h-4 w-full" /></td>)}
+                      </tr>
+                    ))
+                  ) : payments.length === 0 ? (
+                    <tr><td colSpan={6} className="text-center py-12 text-muted-foreground">No payments found</td></tr>
+                  ) : (
+                    payments.map((payment) => (
+                      <tr key={payment._id} className="border-b hover:bg-muted/30 transition-colors">
+                        <td className="p-4">
+                          <p className="font-medium text-sm">{clientName(payment)}</p>
+                          <p className="text-xs text-muted-foreground">{new Date(payment.createdAt).toLocaleDateString()}</p>
+                        </td>
+                        <td className="p-4 hidden md:table-cell text-sm text-muted-foreground">{payment.description}</td>
+                        <td className="p-4">
+                          <p className="font-semibold text-sm">{fmt(payment.amount)}</p>
+                        </td>
+                        <td className="p-4">
+                          <Badge className={`capitalize border ${statusColors[payment.status] || ""}`}>{payment.status}</Badge>
+                        </td>
+                        <td className="p-4 hidden lg:table-cell text-sm text-muted-foreground">
+                          {payment.bankDetails ? `${payment.bankDetails.bankName} ****${payment.bankDetails.accountNumber?.slice(-4)}` : "—"}
+                        </td>
+                        <td className="p-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {payment.status === "pending" && (
+                              <>
+                                <Button size="sm" variant="outline" className="text-success border-success/30 hover:bg-success/10" onClick={() => setApproveTarget(payment)}>
+                                  <Check className="w-4 h-4 mr-1" /> Approve
+                                </Button>
+                                <Button size="sm" variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setRejectTarget(payment)}>
+                                  <X className="w-4 h-4 mr-1" /> Reject
+                                </Button>
+                              </>
+                            )}
+                            {payment.status === "approved" && (
+                              <Button size="sm" variant="default" disabled={isSubmitting} onClick={() => handleProcess(payment)}>
+                                Process
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between p-4 border-t">
+                <p className="text-sm text-muted-foreground">Showing {payments.length} of {total}</p>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setPage(p => p - 1)}><ChevronLeft className="w-4 h-4" /></Button>
+                  <span className="px-3 py-1 text-sm">Page {currentPage} of {totalPages}</span>
+                  <Button variant="outline" size="sm" disabled={currentPage >= totalPages} onClick={() => setPage(p => p + 1)}><ChevronRight className="w-4 h-4" /></Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+        </main>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard 
-          title="Total Payments" 
-          value="$759.95" 
-          icon={DollarSign} 
-          iconColor="from-primary to-accent"
-        />
-        <StatCard 
-          title="Pending" 
-          value="$329.98" 
-          icon={Clock} 
-          iconColor="from-warning to-warning/70"
-        />
-        <StatCard 
-          title="Total Paid" 
-          value="$379.98" 
-          icon={CheckCircle} 
-          iconColor="from-success to-success/70"
-        />
-        <StatCard 
-          title="Verified Clients" 
-          value="42" 
-          icon={Users} 
-          iconColor="from-accent to-accent/70"
-        />
-      </div>
-
-      {/* Search */}
-      <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2 max-w-md">
-        <Search className="w-4 h-4 text-muted-foreground" />
-        <Input
-          placeholder="Search payments..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="border-0 bg-transparent h-auto p-0 focus-visible:ring-0"
-        />
-      </div>
-
-      {/* Payments Table */}
-      <div className="stat-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[800px]">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Client</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Product</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Commission</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Amount</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Bank Details</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Status</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredPayments.map((payment) => (
-                <tr key={payment.id} className="table-row-hover border-b border-border/50 last:border-0">
-                  <td className="py-3 px-4 font-medium">{payment.client}</td>
-                  <td className="py-3 px-4">{payment.product}</td>
-                  <td className="py-3 px-4 text-muted-foreground">{payment.commission}</td>
-                  <td className="py-3 px-4 font-medium">{payment.amount}</td>
-                  <td className="py-3 px-4 text-muted-foreground">{payment.date}</td>
-                  <td className="py-3 px-4 text-muted-foreground">{payment.bank}</td>
-                  <td className="py-3 px-4">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${getStatusBadge(payment.status)}`}>
-                      {payment.status}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4">
-                    {payment.status === "pending" ? (
-                      <div className="flex gap-2">
-                        <Button
-                          variant="success"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedPayment(payment);
-                            setShowApproveDialog(true);
-                          }}
-                        >
-                          <Check className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedPayment(payment);
-                            setShowRejectDialog(true);
-                          }}
-                        >
-                          <X className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground text-sm">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Approve Dialog */}
-      <Dialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
-        <DialogContent>
+      <Dialog open={!!approveTarget} onOpenChange={() => setApproveTarget(null)}>
+        <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Approve Payment</DialogTitle>
-            <DialogDescription>
-              Upload supporting documents and confirm the payment approval for {selectedPayment?.client}.
-            </DialogDescription>
+            <DialogDescription>Approve the payment withdrawal request for {typeof approveTarget?.client === "object" ? (approveTarget?.client as any).storeName : "this client"}?</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 pt-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Upload Document</label>
-              <Input type="file" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Notes (Optional)</label>
-              <Textarea placeholder="Add any notes about this approval..." />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowApproveDialog(false)}>
-                Cancel
-              </Button>
-              <Button variant="success" onClick={handleApprove}>
-                Approve & Send Email
-              </Button>
-            </div>
+          <div className="bg-muted/30 p-3 rounded-lg text-sm space-y-1">
+            <p>Amount: <strong>{fmt(approveTarget?.amount ?? 0)}</strong></p>
+            <p>Description: {approveTarget?.description}</p>
+            {approveTarget?.bankDetails && <p>Bank: {approveTarget.bankDetails.bankName} ****{approveTarget.bankDetails.accountNumber?.slice(-4)}</p>}
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => setApproveTarget(null)}>Cancel</Button>
+            <Button className="flex-1" disabled={isSubmitting} onClick={handleApprove}>{isSubmitting ? "Approving…" : "Approve"}</Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Reject Dialog */}
-      <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
-        <DialogContent>
+      <Dialog open={!!rejectTarget} onOpenChange={() => { setRejectTarget(null); setRejectReason(""); }}>
+        <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Reject Payment</DialogTitle>
-            <DialogDescription>
-              Provide a reason for rejecting the payment for {selectedPayment?.client}. This will be sent via email.
-            </DialogDescription>
+            <DialogDescription>Provide a reason for rejecting this payment.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 pt-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Reason for Rejection</label>
-              <Textarea
-                placeholder="Explain why this payment is being rejected..."
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-                required
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowRejectDialog(false)}>
-                Cancel
-              </Button>
-              <Button variant="destructive" onClick={handleReject}>
-                Reject & Send Email
-              </Button>
-            </div>
+          <Textarea placeholder="Rejection reason (required)" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} rows={3} />
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => { setRejectTarget(null); setRejectReason(""); }}>Cancel</Button>
+            <Button variant="destructive" className="flex-1" disabled={!rejectReason.trim() || isSubmitting} onClick={handleReject}>{isSubmitting ? "Rejecting…" : "Reject"}</Button>
           </div>
         </DialogContent>
       </Dialog>

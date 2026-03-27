@@ -91,11 +91,8 @@ const ClientRegister = () => {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Redirect if already authenticated
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate("/client/dashboard");
-    }
-  }, [isAuthenticated, navigate]);
+  // Only redirect after successful registration (handled in handleSubmit)
+  // Do NOT redirect based on persisted isAuthenticated - that would block the register page
 
   // Handle validation errors from server
   useEffect(() => {
