@@ -29,7 +29,14 @@ const navItems = [
   { name: "Product Issues", href: "/admin/product-issues", icon: AlertTriangle },
 ];
 
-const CATEGORIES = ["Electronics","Bundles","Software","Hardware","Accessories","Services","Other"];
+const CATEGORIES = ['Electronics', 'Bundles', 'Software', 'Hardware', 'Accessories', 
+  'Services', 'Clothing & Apparel', 'Footwear', 'Books & Stationery', 'Furniture', 
+  'Perfume & Fragrance', 'Toys & Games', 'Sports & Outdoors', ' Beauty & Personal Care', 
+  'Food & Beverage', 'Medical', 'Automotive', 'Pet Supplies', 
+  'Industrial & Tools', 'Jewelry & Watches', 'Home & Kitchen', 'Gift Cards', 
+  'Parts & Components', 'Tools', 'Safety Equipment', 'Lighting', 
+  'Audio & Video', 'Networking', 'Storage', 'Fashion', 'Baby & Kids', 
+  'Grocery', 'Mobile Devices', 'Wearables', 'Smart Home', 'Gaming','Travel & luggage','Art & Collectibles','Music & Instruments','Part, inting & Publishing','Real Estate','Financial Services','Health & Wellness','Education & Learning','Events & Experiences','Secondhand/Refurbished','Other'];
 
 const statusColors: Record<string, string> = {
   active: "bg-success/10 text-success",

@@ -28,6 +28,7 @@ import { toast } from "@/hooks/use-toast";
 import { useStorefrontStore, StoreProduct } from "@/store/storefront.store";
 import { useCarouselStore } from "@/store/carousel.store";
 import { useProductStore } from "@/store/product.store";
+import { NegotiationModal } from "./NegotiationModal";
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(n);
@@ -345,7 +346,7 @@ const ContactUsModal = ({ open, onOpenChange, storeInfo, whatsapp }: { open: boo
   );
 };
 
-// Track Order Modal (integrated with existing order search)
+// Track Order Modal
 const TrackOrderModal = ({ open, onOpenChange, onSearchOrders }: { open: boolean; onOpenChange: (open: boolean) => void; onSearchOrders: () => void }) => (
   <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="max-w-md dark:bg-gray-800 dark:border-gray-700 rounded-2xl">
@@ -419,7 +420,7 @@ const SizeGuideModal = ({ open, onOpenChange }: { open: boolean; onOpenChange: (
             <thead>
               <tr className="border-b dark:border-gray-700">
                 <th className="text-left py-2">Size</th><th className="text-left">Chest (in)</th><th className="text-left">Waist (in)</th><th className="text-left">Hip (in)</th>
-              </tr>
+               </tr>
             </thead>
             <tbody>
               {[{ size: "XS", chest: "32-34", waist: "24-26", hip: "34-36" }, { size: "S", chest: "35-37", waist: "27-29", hip: "37-39" }, { size: "M", chest: "38-40", waist: "30-32", hip: "40-42" }, { size: "L", chest: "41-43", waist: "33-35", hip: "43-45" }, { size: "XL", chest: "44-46", waist: "36-38", hip: "46-48" }].map(s => (
@@ -692,6 +693,15 @@ console.log("Store slug from params:", storeSlug); // Add this line
     shippingMethod: "standard", notes: "",
   });
 
+  // Negotiation modal state
+  const [negotiationModal, setNegotiationModal] = useState<{
+    open: boolean;
+    product: any;
+  }>({
+    open: false,
+    product: null,
+  });
+
   // Modal states
   const [modals, setModals] = useState({
     aboutUs: false,
@@ -752,25 +762,25 @@ console.log("Store slug from params:", storeSlug); // Add this line
   const cartTotal = cart?.total ?? 0;
   const whatsapp = (storeInfo as any)?.owner?.whatsapp || (storeInfo as any)?.owner?.phone || "";
 
-  const addToCart = async (productId: string) => {
-    if (!storeSlug) return;
-    try {
-      await manageCart(storeSlug, "add", productId, 1);
-      toast({ title: "Added to Cart", description: "Item has been added to your shopping cart" });
-    } catch {
-      toast({ title: "Error", description: "Failed to add to cart", variant: "destructive" });
-    }
-  };
+const addToCart = async (productId: string) => {
+  if (!storeSlug) return;
+  try {
+    await manageCart(storeSlug, "add", productId, 1);  // ← CALLS WITH "add" ACTION
+    toast({ title: "Added to Cart", description: "Product has been added to your cart" });
+  } catch {
+    toast({ title: "Error", description: "Failed to add to cart" });
+  }
+};
 
-  const updateCart = async (productId: string, quantity: number) => {
-    if (!storeSlug) return;
-    try {
-      if (quantity === 0) await manageCart(storeSlug, "remove", productId);
-      else await manageCart(storeSlug, "update", productId, quantity);
-    } catch {
-      toast({ title: "Error", description: "Failed to update cart", variant: "destructive" });
-    }
-  };
+const updateCart = async (productId: string, quantity: number) => {
+  if (!storeSlug) return;
+  try {
+    if (quantity === 0) await manageCart(storeSlug, "remove", productId);  // ← CALLS WITH "remove"
+    else await manageCart(storeSlug, "update", productId, quantity);        // ← CALLS WITH "update"
+  } catch {
+    toast({ title: "Error", description: "Failed to update cart", variant: "destructive" });
+  }
+};
 
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -968,6 +978,7 @@ console.log("Store slug from params:", storeSlug); // Add this line
                             <Button variant="outline" size="icon" onClick={() => updateCart(item.product._id, item.quantity - 1)} className="rounded-full w-8 h-8">
                               <Minus className="w-3 h-3" />
                             </Button>
+                            
                             <span className="w-8 text-center font-medium dark:text-white">{item.quantity}</span>
                             <Button variant="outline" size="icon" onClick={() => updateCart(item.product._id, item.quantity + 1)} className="rounded-full w-8 h-8">
                               <Plus className="w-3 h-3" />
@@ -1166,13 +1177,26 @@ console.log("Store slug from params:", storeSlug); // Add this line
                         <span className="text-xs text-muted-foreground line-through ml-2">{fmt(product.originalPrice)}</span>
                       )}
                     </div>
-                    <Button 
-                      onClick={e => { e.stopPropagation(); addToCart(product._id); }} 
-                      disabled={product.stock === 0}
-                      className="rounded-full px-4 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
-                    >
-                      <ShoppingCart className="w-4 h-4 mr-1" /> Add
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button 
+                        onClick={e => { e.stopPropagation(); addToCart(product._id); }} 
+                        disabled={product.stock === 0}
+                        className="rounded-full px-4 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70"
+                      >
+                        <ShoppingCart className="w-4 h-4 mr-1" /> Add
+                      </Button>
+                      <Button 
+                        onClick={e => { 
+                          e.stopPropagation(); 
+                          setNegotiationModal({ open: true, product: product });
+                        }} 
+                        variant="outline"
+                        className="rounded-full px-4"
+                        disabled={product.stock === 0}
+                      >
+                         Negotiate
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1480,13 +1504,38 @@ console.log("Store slug from params:", storeSlug); // Add this line
                   </div>
                   <div className="space-y-4">
                     <div className="flex gap-4">
-                      <Button variant="default" className="flex-1 rounded-full h-12 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70" disabled={selectedProduct.stock === 0} onClick={() => addToCart(selectedProduct._id)}>
+                      <Button 
+                        variant="default" 
+                        className="flex-1 rounded-full h-12 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70" 
+                        disabled={selectedProduct.stock === 0} 
+                        onClick={() => addToCart(selectedProduct._id)}
+                      >
                         <ShoppingCart className="w-4 h-4 mr-2" /> Add to Cart
                       </Button>
-                      <Button variant="outline" className="flex-1 rounded-full h-12" disabled={selectedProduct.stock === 0} onClick={() => { addToCart(selectedProduct._id); setSelectedProduct(null); setCartOpen(true); }}>
+                      <Button 
+                        variant="outline" 
+                        className="flex-1 rounded-full h-12" 
+                        disabled={selectedProduct.stock === 0} 
+                        onClick={() => { 
+                          addToCart(selectedProduct._id); 
+                          setSelectedProduct(null); 
+                          setCartOpen(true); 
+                        }}
+                      >
                         Buy Now
                       </Button>
                     </div>
+                    <Button 
+                      variant="outline" 
+                      className="w-full rounded-full h-12 border-yellow-500 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20"
+                      disabled={selectedProduct.stock === 0}
+                      onClick={() => {
+                        setNegotiationModal({ open: true, product: selectedProduct });
+                        setSelectedProduct(null);
+                      }}
+                    >
+                     Negotiate Price
+                    </Button>
                     {selectedProduct.stock === 0 && <p className="text-red-500 text-sm text-center">Currently out of stock</p>}
                     {whatsapp && (
                       <div className="pt-4 border-t dark:border-gray-700">
@@ -1796,6 +1845,20 @@ console.log("Store slug from params:", storeSlug); // Add this line
           <Button onClick={() => setOrderComplete(null)} className="w-full rounded-full bg-gradient-to-r from-primary to-primary/80">Continue Shopping</Button>
         </DialogContent>
       </Dialog>
+
+      {/* Negotiation Modal */}
+      {negotiationModal.product && (
+        <NegotiationModal
+          open={negotiationModal.open}
+          onClose={() => setNegotiationModal({ open: false, product: null })}
+          product={negotiationModal.product}
+          storeSlug={storeSlug || ''}
+          storeOwnerId={(storeInfo as any)?.owner?._id || (storeInfo as any)?.userId || ''}
+          customerName={checkoutForm.name || ''}
+          customerEmail={checkoutForm.email || ''}
+          customerPhone={checkoutForm.phone || ''}
+        />
+      )}
 
     </div>
   );

@@ -12,7 +12,17 @@ export interface Product {
   _id: string;
   name: string;
   description?: string;
-  category: 'Electronics' | 'Bundles' | 'Software' | 'Hardware' | 'Accessories' | 'Services' | 'Other';
+category: 'Electronics' | 'Bundles' | 'Software' | 'Hardware' | 'Accessories' | 'Services' | 
+  'Clothing & Apparel' | 'Footwear' | 'Books & Stationery' | 'Furniture' | 
+  'Perfume & Fragrance' | 'Toys & Games' | 'Sports & Outdoors' | 'Beauty & Personal Care' | 
+  'Food & Beverage' | 'Medical' | 'Automotive' | 'Pet Supplies' | 
+  'Industrial & Tools' | 'Jewelry & Watches' | 'Home & Kitchen' | 'Gift Cards' | 
+  'Parts & Components' | 'Tools' | 'Safety Equipment' | 'Lighting' | 
+  'Audio & Video' | 'Networking' | 'Storage' | 'Fashion' | 'Baby & Kids' | 
+  'Grocery' | 'Mobile Devices' | 'Wearables' | 'Smart Home' | 'Gaming' | 
+  'Travel & Luggage' | 'Art & Collectibles' | 'Music & Instruments' | 
+  'Printing & Publishing' | 'Real Estate' | 'Financial Services' | 'Health & Wellness' | 
+  'Education & Learning' | 'Events & Experiences' | 'Secondhand/Refurbished' | 'Other';
   price: number;
   stock: number;
   images: ProductImage[];
@@ -261,16 +271,32 @@ export const useProductStore = create<ProductState>((set, get) => ({
   },
 
   submitReview: async (productId, data) => {
-    set({ isSubmitting: true, error: null });
-    try {
-      await api.post(`/api/v1/products/${productId}/reviews`, data);
-      set({ isSubmitting: false });
-    } catch (err) {
-      const msg = err instanceof AxiosError ? err.response?.data?.error || 'Failed to submit review' : 'Failed to submit review';
-      set({ error: msg, isSubmitting: false });
-      throw new Error(msg);
-    }
-  },
+  set({ isSubmitting: true, error: null });
+  try {
+    // Get token from localStorage
+    const token = localStorage.getItem('token');
+    
+    // Make sure the api instance includes the token
+    const response = await api.post(`/api/v1/products/${productId}/reviews`, data, {
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    console.log('Review submission response:', response.data);
+    
+    set({ isSubmitting: false });
+    return response.data;
+  } catch (err: any) {
+    console.error('Review submission error:', err.response?.data || err.message);
+    const msg = err instanceof AxiosError 
+      ? err.response?.data?.error || err.response?.data?.message || 'Failed to submit review' 
+      : 'Failed to submit review';
+    set({ error: msg, isSubmitting: false });
+    throw new Error(msg);
+  }
+},
 
   fetchReviews: async (productId, page = 1) => {
     try {

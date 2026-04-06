@@ -170,18 +170,24 @@ export const useStorefrontStore = create<StorefrontState>((set) => ({
       // Cart may not exist yet
     }
   },
-
-  manageCart: async (slug, action, productId, quantity) => {
-    set({ isSubmitting: true, error: null });
-    try {
-      const res = await api.post(`/api/v1/storefront/${slug}/cart`, { action, productId, quantity });
-      set({ cart: res.data.data || null, isSubmitting: false });
-    } catch (err) {
-      const msg = err instanceof AxiosError ? err.response?.data?.message || err.response?.data?.error || 'Cart operation failed' : 'Cart operation failed';
-      set({ error: msg, isSubmitting: false });
-      throw new Error(msg);
+manageCart: async (slug, action, productId, quantity) => {
+  set({ isSubmitting: true, error: null });
+  try {
+    const res = await api.post(`/api/v1/storefront/${slug}/cart`, { action, productId, quantity });
+    
+    // Ensure we have a valid cart object
+    const updatedCart = res.data.data;
+    if (!updatedCart || !updatedCart.items) {
+      throw new Error('Invalid cart response from server');
     }
-  },
+    
+    set({ cart: updatedCart, isSubmitting: false });
+  } catch (err) {
+    const msg = err instanceof AxiosError ? err.response?.data?.message || err.response?.data?.error || 'Cart operation failed' : 'Cart operation failed';
+    set({ error: msg, isSubmitting: false });
+    throw new Error(msg);
+  }
+},
 
 placeOrder: async (slug, orderData) => {
     set({ isSubmitting: true, error: null });
@@ -204,7 +210,7 @@ placeOrder: async (slug, orderData) => {
         productId: typeof item.product === 'string' ? item.product : item.product._id,
         quantity: item.quantity,
       }));
-
+      
       const res = await api.post('/api/v1/orders', {
         ...orderData,
         clientId,
