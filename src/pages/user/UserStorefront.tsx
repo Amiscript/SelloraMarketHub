@@ -512,19 +512,40 @@ const CustomerServiceModal = ({ open, onOpenChange, storeInfo, whatsapp }: { ope
   </Dialog>
 );
 
-// ── Review Section ────────────────────────────────────────────────────────────
-const ReviewSection = ({ productId, ratings }: { productId: string; ratings: any }) => {
+
+// Review Section - Updated version
+const ReviewSection = ({ productId, ratings: initialRatings, onReviewSubmitted }: { 
+  productId: string; 
+  ratings: any; 
+  onReviewSubmitted?: () => void;
+}) => {
   const [reviews, setReviews] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [comment, setComment] = useState("");
   const [rating, setRating] = useState(5);
   const [submitting, setSubmitting] = useState(false);
+  const [currentRatings, setCurrentRatings] = useState(initialRatings);
   const { submitReview, fetchReviews } = useProductStore();
 
+  const loadReviews = async () => {
+    const result = await fetchReviews(productId);
+    setReviews(result.reviews || []);
+    if (result.ratings) {
+      setCurrentRatings(result.ratings);
+    }
+  };
+
   useEffect(() => {
-    fetchReviews(productId).then(d => setReviews(d.reviews || []));
+    loadReviews();
   }, [productId]);
+
+  // Update local ratings when prop changes
+  useEffect(() => {
+    if (initialRatings) {
+      setCurrentRatings(initialRatings);
+    }
+  }, [initialRatings]);
 
   const handleSubmit = async () => {
     if (!name.trim() || !comment.trim()) {
@@ -533,11 +554,20 @@ const ReviewSection = ({ productId, ratings }: { productId: string; ratings: any
     }
     setSubmitting(true);
     try {
-      await submitReview(productId, { rating, comment, name });
+      const result = await submitReview(productId, { rating, comment, name });
       toast({ title: "Review submitted! Thank you." });
       setShowForm(false);
-      setName(""); setComment(""); setRating(5);
-      fetchReviews(productId).then(d => setReviews(d.reviews || []));
+      setName(""); 
+      setComment(""); 
+      setRating(5);
+      
+      // Refresh reviews and ratings
+      await loadReviews();
+      
+      // Call callback if provided
+      if (onReviewSubmitted) {
+        onReviewSubmitted();
+      }
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
@@ -545,39 +575,43 @@ const ReviewSection = ({ productId, ratings }: { productId: string; ratings: any
     }
   };
 
+  const reviewCount = currentRatings?.count ?? reviews.length;
+  const averageRating = currentRatings?.average ?? 0;
+  const distribution = currentRatings?.distribution || { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+
   return (
     <div className="pt-4 border-t dark:border-gray-700 space-y-4">
       <div className="flex items-center justify-between">
         <h4 className="font-semibold dark:text-white flex items-center gap-2">
           <StarIcon className="w-4 h-4 text-amber-500" />
-          Customer Reviews ({ratings?.count ?? reviews.length})
+          Customer Reviews ({reviewCount})
         </h4>
         <Button size="sm" variant="outline" onClick={() => setShowForm(!showForm)} className="rounded-full">
           {showForm ? "Cancel" : "Write a Review"}
         </Button>
       </div>
 
-      {ratings && ratings.count > 0 && (
+      {reviewCount > 0 && (
         <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-gray-800/50 dark:to-gray-800/30 rounded-xl">
           <div className="text-center">
-            <span className="text-4xl font-bold dark:text-white">{ratings.average.toFixed(1)}</span>
+            <span className="text-4xl font-bold dark:text-white">{averageRating.toFixed(1)}</span>
             <div className="flex mt-1">
               {[1,2,3,4,5].map(s => (
-                <Star key={s} className={`w-4 h-4 ${s <= Math.round(ratings.average) ? "fill-amber-400 text-amber-400" : "text-gray-300 dark:text-gray-600"}`} />
+                <Star key={s} className={`w-4 h-4 ${s <= Math.round(averageRating) ? "fill-amber-400 text-amber-400" : "text-gray-300 dark:text-gray-600"}`} />
               ))}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">{ratings.count} reviews</p>
+            <p className="text-xs text-muted-foreground mt-1">{reviewCount} reviews</p>
           </div>
           <div className="flex-1">
             <div className="space-y-1">
               {[5,4,3,2,1].map(star => {
-                const count = ratings.distribution?.[star] || 0;
-                const percentage = ratings.count ? (count / ratings.count) * 100 : 0;
+                const count = distribution[star] || 0;
+                const percentage = reviewCount ? (count / reviewCount) * 100 : 0;
                 return (
                   <div key={star} className="flex items-center gap-2 text-xs">
                     <span className="w-6 text-muted-foreground">{star}★</span>
                     <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                      <div className="h-full bg-amber-400 rounded-full" style={{ width: `${percentage}%` }} />
+                      <div className="h-full bg-amber-400 rounded-full transition-all duration-300" style={{ width: `${percentage}%` }} />
                     </div>
                     <span className="w-8 text-muted-foreground">{count}</span>
                   </div>
@@ -593,13 +627,23 @@ const ReviewSection = ({ productId, ratings }: { productId: string; ratings: any
           <div className="space-y-4">
             <div>
               <Label className="text-sm font-medium dark:text-gray-300">Your Name</Label>
-              <Input value={name} onChange={e => setName(e.target.value)} placeholder="Enter your name" className="mt-1.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white rounded-lg" />
+              <Input 
+                value={name} 
+                onChange={e => setName(e.target.value)} 
+                placeholder="Enter your name" 
+                className="mt-1.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white rounded-lg" 
+              />
             </div>
             <div>
               <Label className="text-sm font-medium dark:text-gray-300">Rating</Label>
               <div className="flex gap-1.5 mt-2">
                 {[1,2,3,4,5].map(s => (
-                  <button key={s} onClick={() => setRating(s)} type="button" className="transition-transform hover:scale-110">
+                  <button 
+                    key={s} 
+                    onClick={() => setRating(s)} 
+                    type="button" 
+                    className="transition-transform hover:scale-110 focus:outline-none"
+                  >
                     <Star className={`w-7 h-7 cursor-pointer transition-all ${s <= rating ? "fill-amber-400 text-amber-400" : "text-gray-300 dark:text-gray-600"}`} />
                   </button>
                 ))}
@@ -607,9 +651,19 @@ const ReviewSection = ({ productId, ratings }: { productId: string; ratings: any
             </div>
             <div>
               <Label className="text-sm font-medium dark:text-gray-300">Your Review</Label>
-              <Textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="Share your experience with this product..." rows={3} className="mt-1.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white rounded-lg resize-none" />
+              <Textarea 
+                value={comment} 
+                onChange={e => setComment(e.target.value)} 
+                placeholder="Share your experience with this product..." 
+                rows={3} 
+                className="mt-1.5 dark:bg-gray-700 dark:border-gray-600 dark:text-white rounded-lg resize-none" 
+              />
             </div>
-            <Button onClick={handleSubmit} disabled={submitting} className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600">
+            <Button 
+              onClick={handleSubmit} 
+              disabled={submitting} 
+              className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600"
+            >
               {submitting ? "Submitting..." : "Submit Review"}
             </Button>
           </div>
@@ -627,7 +681,7 @@ const ReviewSection = ({ productId, ratings }: { productId: string; ratings: any
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-orange-400 flex items-center justify-center text-white font-medium text-sm">
-                  {r.name.charAt(0).toUpperCase()}
+                  {r.name?.charAt(0).toUpperCase() || '?'}
                 </div>
                 <p className="font-medium text-sm dark:text-white">{r.name}</p>
               </div>
@@ -638,14 +692,15 @@ const ReviewSection = ({ productId, ratings }: { productId: string; ratings: any
               </div>
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed">{r.comment}</p>
-            <p className="text-xs text-muted-foreground/60 mt-2">{new Date(r.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</p>
+            <p className="text-xs text-muted-foreground/60 mt-2">
+              {r.createdAt ? new Date(r.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'Just now'}
+            </p>
           </div>
         ))}
       </div>
     </div>
   );
 };
-
 // ── Main Component ────────────────────────────────────────────────────────────
 const UserStorefront = () => {
   const { storeSlug } = useParams<{ storeSlug: string }>();
@@ -764,8 +819,29 @@ console.log("Store slug from params:", storeSlug); // Add this line
 
 const addToCart = async (productId: string) => {
   if (!storeSlug) return;
+  
+  // Find the product to check stock
+  const product = products.find(p => p._id === productId);
+  if (!product) {
+    toast({ title: "Error", description: "Product not found" });
+    return;
+  }
+  
+  // Get current cart item quantity
+  const cartItem = cart?.items.find(item => item.product._id === productId);
+  const newQuantity = (cartItem?.quantity || 0) + 1;
+  
+  if (newQuantity > product.stock) {
+    toast({ 
+      title: "Cannot Add to Cart", 
+      description: `Only ${product.stock} items available in stock.`,
+      variant: "destructive" 
+    });
+    return;
+  }
+  
   try {
-    await manageCart(storeSlug, "add", productId, 1);  // ← CALLS WITH "add" ACTION
+    await manageCart(storeSlug, "add", productId, 1);
     toast({ title: "Added to Cart", description: "Product has been added to your cart" });
   } catch {
     toast({ title: "Error", description: "Failed to add to cart" });
@@ -774,9 +850,24 @@ const addToCart = async (productId: string) => {
 
 const updateCart = async (productId: string, quantity: number) => {
   if (!storeSlug) return;
+  
+  // Find the product to check stock
+  const product = products.find(p => p._id === productId);
+  if (product && quantity > product.stock) {
+    toast({ 
+      title: "Insufficient Stock", 
+      description: `Only ${product.stock} items available in stock.`,
+      variant: "destructive" 
+    });
+    return;
+  }
+  
   try {
-    if (quantity === 0) await manageCart(storeSlug, "remove", productId);  // ← CALLS WITH "remove"
-    else await manageCart(storeSlug, "update", productId, quantity);        // ← CALLS WITH "update"
+    if (quantity === 0) {
+      await manageCart(storeSlug, "remove", productId);
+    } else {
+      await manageCart(storeSlug, "update", productId, quantity);
+    }
   } catch {
     toast({ title: "Error", description: "Failed to update cart", variant: "destructive" });
   }
@@ -785,6 +876,26 @@ const updateCart = async (productId: string, quantity: number) => {
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!storeSlug) return;
+
+
+  const stockIssues = [];
+  for (const item of cart?.items || []) {
+    const product = products.find(p => p._id === item.product._id);
+    if (product && item.quantity > product.stock) {
+      stockIssues.push(`${product.name}: requested ${item.quantity}, available ${product.stock}`);
+    }
+  }
+  
+  if (stockIssues.length > 0) {
+    toast({ 
+      title: "Stock Issues", 
+      description: stockIssues.join(', '),
+      variant: "destructive" 
+    });
+    return;
+  }
+
+
     try {
       const result = await placeOrder(storeSlug, {
         customer: { name: checkoutForm.name, phone: checkoutForm.phone, email: checkoutForm.email, location: checkoutForm.location },
@@ -1176,6 +1287,12 @@ const updateCart = async (productId: string, quantity: number) => {
                       {product.originalPrice && product.originalPrice > product.price && (
                         <span className="text-xs text-muted-foreground line-through ml-2">{fmt(product.originalPrice)}</span>
                       )}
+
+                      {product.stock > 0 && product.stock < 10 && (
+      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+        Only {product.stock} left in stock!
+      </p>
+    )}
                     </div>
                     <div className="flex gap-2">
                       <Button 
@@ -1544,7 +1661,16 @@ const updateCart = async (productId: string, quantity: number) => {
                         </Button>
                       </div>
                     )}
-                    <ReviewSection productId={selectedProduct._id} ratings={selectedProduct.ratings} />
+                
+<ReviewSection 
+  productId={selectedProduct._id} 
+  ratings={selectedProduct.ratings}
+  onReviewSubmitted={() => {
+    if (storeSlug) {
+      fetchStoreProducts(storeSlug);
+    }
+  }}
+/>
                   </div>
                 </div>
               </div>

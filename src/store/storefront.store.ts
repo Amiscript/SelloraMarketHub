@@ -1,3 +1,4 @@
+
 import { create } from 'zustand';
 import { api } from '@/lib/api';
 import { AxiosError } from 'axios';
@@ -41,7 +42,7 @@ export interface StoreProduct {
   category: string;
   price: number;
   stock: number;
-  originalPrice:number;
+  originalPrice: number;
   images: Array<{ url: string; public_id: string }>;
   status: string;
   commissionRate: number;
@@ -76,29 +77,20 @@ interface StorefrontState {
   isSubmitting: boolean;
   error: string | null;
 
-  // Public storefront
   fetchStorefront: (slug: string) => Promise<void>;
   fetchStoreProducts: (slug: string, filters?: { page?: number; search?: string; category?: string }) => Promise<void>;
   fetchProductDetails: (slug: string, productSlug: string) => Promise<void>;
   fetchCart: (slug: string, sessionId?: string) => Promise<void>;
+  refreshCart: (slug: string) => Promise<void>;
   manageCart: (slug: string, action: 'add' | 'remove' | 'update' | 'clear', productId?: string, quantity?: number) => Promise<void>;
-
-  // Place order from storefront (public — no auth needed)
-  placeOrder: (slug: string, orderData: {
-    customer: { name: string; phone: string; email: string; location: string };
-    shippingAddress?: string;
-    shippingMethod: string;
-    notes?: string;
-  }) => Promise<{ order: any; paymentUrl: string; reference: string }>;
-
-  // Client storefront settings (authenticated)
+  placeOrder: (slug: string, orderData: any) => Promise<{ order: any; paymentUrl: string; reference: string }>;
+  verifyPayment: (reference: string, orderId: string) => Promise<{ success: boolean; order?: any; error?: string }>;
   fetchClientSettings: () => Promise<void>;
   updateClientSettings: (data: Partial<StorefrontSettings>) => Promise<void>;
-
   clearError: () => void;
 }
 
-export const useStorefrontStore = create<StorefrontState>((set) => ({
+export const useStorefrontStore = create<StorefrontState>((set, get) => ({
   storeInfo: null,
   products: [],
   selectedProduct: null,
@@ -118,7 +110,6 @@ export const useStorefrontStore = create<StorefrontState>((set) => ({
       const d = res.data.data;
       set({
         storeInfo: d?.storefront || d?.store || d?.client || null,
-        // Backend returns products alongside storefront in same call
         products: d?.products || [],
         isLoading: false,
       });
@@ -165,31 +156,79 @@ export const useStorefrontStore = create<StorefrontState>((set) => ({
     try {
       const params = sessionId ? `?sessionId=${sessionId}` : '';
       const res = await api.get(`/api/v1/storefront/${slug}/cart${params}`);
-      set({ cart: res.data.data || null });
+      const cartData = res.data.data;
+      
+      if (cartData && cartData.items) {
+        cartData.items = cartData.items.map((item: any) => ({
+          ...item,
+          product: {
+            ...item.product,
+            images: item.product.images || (item.product.image ? [{ url: item.product.image }] : [])
+          }
+        }));
+      }
+      
+      set({ cart: cartData || null });
     } catch {
-      // Cart may not exist yet
+      set({ cart: { items: [], total: 0, storeSlug: slug } });
     }
   },
-manageCart: async (slug, action, productId, quantity) => {
-  set({ isSubmitting: true, error: null });
-  try {
-    const res = await api.post(`/api/v1/storefront/${slug}/cart`, { action, productId, quantity });
-    
-    // Ensure we have a valid cart object
-    const updatedCart = res.data.data;
-    if (!updatedCart || !updatedCart.items) {
-      throw new Error('Invalid cart response from server');
-    }
-    
-    set({ cart: updatedCart, isSubmitting: false });
-  } catch (err) {
-    const msg = err instanceof AxiosError ? err.response?.data?.message || err.response?.data?.error || 'Cart operation failed' : 'Cart operation failed';
-    set({ error: msg, isSubmitting: false });
-    throw new Error(msg);
-  }
-},
 
-placeOrder: async (slug, orderData) => {
+  refreshCart: async (slug: string) => {
+    try {
+      const res = await api.get(`/api/v1/storefront/${slug}/cart`);
+      const cartData = res.data?.data;
+      if (cartData && cartData.items) {
+        cartData.items = cartData.items.map((item: any) => ({
+          ...item,
+          product: {
+            ...item.product,
+            images: item.product.images || (item.product.image ? [{ url: item.product.image }] : [])
+          }
+        }));
+      }
+      set({ cart: cartData || null });
+    } catch (error) {
+      console.error('Failed to refresh cart:', error);
+    }
+  },
+
+  manageCart: async (slug, action, productId, quantity = 1) => {
+    set({ isSubmitting: true, error: null });
+    try {
+      const response = await api.post(`/api/v1/storefront/${slug}/cart`, {
+        productId,
+        action,
+        quantity: action === 'add' ? quantity : (action === 'update' ? quantity : undefined)
+      });
+      
+      const updatedCart = response.data?.data;
+      
+      if (updatedCart) {
+        if (updatedCart.items) {
+          updatedCart.items = updatedCart.items.map((item: any) => ({
+            ...item,
+            product: {
+              ...item.product,
+              images: item.product.images || (item.product.image ? [{ url: item.product.image }] : [])
+            }
+          }));
+        }
+        set({ cart: updatedCart, isSubmitting: false });
+      } else {
+        await get().refreshCart(slug);
+        set({ isSubmitting: false });
+      }
+    } catch (err) {
+      const msg = err instanceof AxiosError 
+        ? err.response?.data?.message || err.response?.data?.error || 'Cart operation failed' 
+        : 'Cart operation failed';
+      set({ error: msg, isSubmitting: false });
+      throw new Error(msg);
+    }
+  },
+
+  placeOrder: async (slug, orderData) => {
     set({ isSubmitting: true, error: null });
     try {
       const storefrontRes = await api.get(`/api/v1/storefront/${slug}`);
@@ -217,7 +256,17 @@ placeOrder: async (slug, orderData) => {
         products,
       });
 
+      // Store order info for potential recovery
+      const orderDataToStore = {
+        orderId: res.data.order._id,
+        reference: res.data.payment?.reference,
+        storeSlug: slug,
+        timestamp: Date.now(),
+      };
+      sessionStorage.setItem('pendingOrder', JSON.stringify(orderDataToStore));
+      
       set({ isSubmitting: false });
+      
       return {
         order: res.data.order,
         paymentUrl: res.data.payment?.authorization_url,
@@ -232,7 +281,28 @@ placeOrder: async (slug, orderData) => {
     }
   },
 
-fetchClientSettings: async () => {
+  verifyPayment: async (reference: string, orderId: string) => {
+    set({ isLoading: true });
+    try {
+      const res = await api.post('/api/v1/orders/verify-payment', { reference, orderId });
+      
+      if (res.data.success) {
+        // Clear pending order after successful payment
+        sessionStorage.removeItem('pendingOrder');
+        set({ isLoading: false });
+        return { success: true, order: res.data.order };
+      } else {
+        set({ isLoading: false });
+        return { success: false, error: res.data.error };
+      }
+    } catch (err: any) {
+      const msg = err instanceof AxiosError ? err.response?.data?.error : 'Payment verification failed';
+      set({ isLoading: false });
+      return { success: false, error: msg };
+    }
+  },
+
+  fetchClientSettings: async () => {
     set({ isLoading: true, error: null });
     try {
       const res = await api.get('/api/v1/client/storefront/settings');
@@ -242,7 +312,8 @@ fetchClientSettings: async () => {
       set({ error: msg, isLoading: false });
     }
   },
-updateClientSettings: async (data) => {
+
+  updateClientSettings: async (data) => {
     set({ isSubmitting: true, error: null });
     try {
       const res = await api.put('/api/v1/client/storefront/settings', data);

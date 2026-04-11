@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useParams } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
+import PaymentVerify from './pages/PaymentVerify';
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminOrders from "./pages/admin/AdminOrders";
@@ -53,6 +54,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           {/* Public Routes */}
+           <Route path="/payment-verify" element={<PaymentVerify />} />
           <Route path="/" element={
             <ChatLayout chatType="store" storeName="MarketHub Support">
               <Index />
@@ -112,6 +114,8 @@ const App = () => (
               </ProtectedRoute>
             } />
           </Route>
+
+           
           
           {/* Client Routes Group */}
           <Route path="/client">
@@ -120,6 +124,7 @@ const App = () => (
             <Route path="register" element={<ClientRegister />} />
             <Route path="verification-pending" element={<VerificationPending />} />
             <Route path="resend-verification" element={<ResendVerification />} />
+          
             
             {/* Protected Client Routes */}
             <Route path="dashboard" element={

@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
 import { useChatStore, ChatContext, ChatMessage } from "@/store/chat.store";
 import { useAuthStore } from "@/store/auth.store";
+import { useToast } from "@/components/ui/use-toast";
 
 interface ChatWidgetProps {
   type?: "admin" | "client" | "store";
@@ -52,11 +53,12 @@ export default function ChatWidget({ type = "client", storeName, storeSlug }: Ch
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [guestForm, setGuestForm] = useState({ name: "", email: "", phone: "" });
   const [showGuestForm, setShowGuestForm] = useState(type === "store");
+  const [isStartingChat, setIsStartingChat] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const {
     chats, activeChat, isLoading, isSending, error, isConnected, unreadCount,
-    fetchChats, fetchChatById, createChat, sendMessage, markAsRead,
+    fetchChats, fetchChatById, createChat, initiateStoreChat, sendMessage, markAsRead,
     connectSocket, disconnectSocket, joinChat, leaveChat, fetchUnreadCount, clearError,
   } = useChatStore();
 
@@ -64,7 +66,7 @@ export default function ChatWidget({ type = "client", storeName, storeSlug }: Ch
   const context = contextMap[type] || "general";
   const gradient = gradientMap[type] || gradientMap.client;
   const title = type === "store" && storeName ? storeName : titleMap[type] || "Support";
-
+const { toast } = useToast();
   // Connect socket + fetch chats for authenticated users
   useEffect(() => {
     if (token && type !== "store") {
@@ -102,7 +104,7 @@ export default function ChatWidget({ type = "client", storeName, storeSlug }: Ch
     if (chats.length === 0 && token && type !== "store") {
       try {
         const newChat = await createChat(
-          { participantId: "support", message: "Hello, I need help." },
+          { participantId: "support", participantType: "admin", message: "Hello, I need help." },
           context as ChatContext
         );
         setActiveChatId(newChat._id);
@@ -115,25 +117,53 @@ export default function ChatWidget({ type = "client", storeName, storeSlug }: Ch
     e.preventDefault();
     if (!inputValue.trim() || !activeChatId) return;
     try {
-      await sendMessage(activeChatId, inputValue.trim(), "text", context as ChatContext);
+      await sendMessage(activeChatId, inputValue.trim(), [], context as ChatContext);
       setInputValue("");
     } catch { /* error shown inline */ }
   };
 
+  // FIXED: Use initiateStoreChat for guest users
   const handleGuestStart = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!guestForm.name || !guestForm.phone) return;
+    if (!guestForm.name || !guestForm.phone) {
+      toast({
+        title: "Required Fields",
+        description: "Name and phone are required to start a chat",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setIsStartingChat(true);
+    
     try {
-      const newChat = await createChat(
-        { participantId: storeSlug || "store", participantModel: "store", message: inputValue || `Hi! I'm ${guestForm.name}.` },
-        "store",
-        storeSlug
-      );
+      // Use the dedicated initiateStoreChat method
+      const newChat = await initiateStoreChat(storeSlug || "store", {
+        customerName: guestForm.name,
+        customerEmail: guestForm.email || "",
+        customerPhone: guestForm.phone,
+        message: inputValue || `Hi! I'm ${guestForm.name}. I need assistance with your store.`,
+      });
+      
       setActiveChatId(newChat._id);
       joinChat(newChat._id);
-    } catch { /* fall through to local chat */ }
-    setShowGuestForm(false);
-    setInputValue("");
+      setShowGuestForm(false);
+      setInputValue("");
+      
+      toast({
+        title: "Chat Started",
+        description: "You can now chat with the store owner",
+      });
+    } catch (error: any) {
+      console.error("Failed to start chat:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Unable to start chat. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsStartingChat(false);
+    }
   };
 
   const messages = activeChat?.messages || [];
@@ -202,21 +232,57 @@ export default function ChatWidget({ type = "client", storeName, storeSlug }: Ch
                 </div>
                 <div>
                   <label className="block text-xs font-medium mb-1">Name *</label>
-                  <Input value={guestForm.name} onChange={e => setGuestForm(f => ({ ...f, name: e.target.value }))} placeholder="Your name" required />
+                  <Input 
+                    value={guestForm.name} 
+                    onChange={e => setGuestForm(f => ({ ...f, name: e.target.value }))} 
+                    placeholder="Your name" 
+                    required 
+                    disabled={isStartingChat}
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-medium mb-1">Phone *</label>
-                  <Input value={guestForm.phone} onChange={e => setGuestForm(f => ({ ...f, phone: e.target.value }))} placeholder="+234..." required />
+                  <Input 
+                    value={guestForm.phone} 
+                    onChange={e => setGuestForm(f => ({ ...f, phone: e.target.value }))} 
+                    placeholder="+234..." 
+                    required 
+                    disabled={isStartingChat}
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-medium mb-1">Email</label>
-                  <Input type="email" value={guestForm.email} onChange={e => setGuestForm(f => ({ ...f, email: e.target.value }))} placeholder="you@example.com" />
+                  <Input 
+                    type="email" 
+                    value={guestForm.email} 
+                    onChange={e => setGuestForm(f => ({ ...f, email: e.target.value }))} 
+                    placeholder="you@example.com" 
+                    disabled={isStartingChat}
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-medium mb-1">Message (optional)</label>
-                  <Input value={inputValue} onChange={e => setInputValue(e.target.value)} placeholder="How can we help?" />
+                  <Input 
+                    value={inputValue} 
+                    onChange={e => setInputValue(e.target.value)} 
+                    placeholder="How can we help?" 
+                    disabled={isStartingChat}
+                  />
                 </div>
-                <Button type="submit" className={`w-full bg-gradient-to-r ${gradient} text-white border-0`}>Start Chat</Button>
+                <Button 
+                  type="submit" 
+                  disabled={isStartingChat}
+                  className={`w-full bg-gradient-to-r ${gradient} text-white border-0`}
+                >
+                  {isStartingChat ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Starting Chat...
+                    </>
+                  ) : (
+                    "Start Chat"
+                  )}
+                </Button>
                 <p className="text-[10px] text-center text-gray-400">By starting a chat, you agree to our Terms</p>
               </form>
             ) : (
@@ -237,13 +303,15 @@ export default function ChatWidget({ type = "client", storeName, storeSlug }: Ch
                   )}
                   {messages.map((msg) => {
                     const own = isOwnMessage(msg, currentUserId);
+                    // Handle both 'content' and 'text' field names
+                    const messageContent = (msg as any).content || msg.text || '';
                     return (
                       <motion.div key={msg._id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                         className={`flex ${own ? "justify-end" : "justify-start"}`}>
                         <div className="max-w-[75%]">
                           {!own && <p className="text-xs text-gray-500 mb-1 ml-2">{getSenderName(msg, currentUserId)}</p>}
                           <div className={`rounded-2xl px-3.5 py-2.5 shadow-sm ${own ? `bg-gradient-to-r ${gradient} text-white` : "bg-white border border-slate-200 text-slate-800"}`}>
-                            <p className="text-sm leading-relaxed break-words">{msg.content}</p>
+                            <p className="text-sm leading-relaxed break-words">{messageContent}</p>
                             <p className={`text-[10px] mt-0.5 text-right ${own ? "text-white/60" : "text-slate-400"}`}>{formatTime(msg.createdAt)}</p>
                           </div>
                         </div>

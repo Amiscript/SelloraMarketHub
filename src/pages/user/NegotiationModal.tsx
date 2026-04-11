@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import {
   Dialog,
@@ -37,7 +36,7 @@ export const NegotiationModal: React.FC<NegotiationModalProps> = ({
 }) => {
   const [offerPrice, setOfferPrice] = useState('');
   const [message, setMessage] = useState('');
-  const { createChat } = useChatStore();
+  const { createChat, initiateStoreChat } = useChatStore();
   const { createNegotiation, isSubmitting, error, clearError } = useNegotiationStore();
   const { toast } = useToast();
 
@@ -61,85 +60,95 @@ export const NegotiationModal: React.FC<NegotiationModalProps> = ({
     onClose();
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+// In NegotiationModal.tsx - Fix the handleSubmit function
 
-    if (!offerPrice || Number(offerPrice) <= 0) {
-      toast({
-        title: 'Invalid Price',
-        description: 'Please enter a valid offer price',
-        variant: 'destructive',
-      });
-      return;
-    }
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
 
-    if (Number(offerPrice) >= originalPrice) {
-      toast({
-        title: 'Invalid Offer',
-        description: 'Your offer must be less than the original price',
-        variant: 'destructive',
-      });
-      return;
-    }
+  if (!offerPrice || Number(offerPrice) <= 0) {
+    toast({
+      title: 'Invalid Price',
+      description: 'Please enter a valid offer price',
+      variant: 'destructive',
+    });
+    return;
+  }
 
-    if (!message.trim()) {
-      toast({
-        title: 'Message Required',
-        description: 'Please tell the seller why they should accept your offer',
-        variant: 'destructive',
-      });
-      return;
-    }
+  if (Number(offerPrice) >= originalPrice) {
+    toast({
+      title: 'Invalid Offer',
+      description: 'Your offer must be less than the original price',
+      variant: 'destructive',
+    });
+    return;
+  }
 
-    try {
-      // Step 1: Create negotiation record using the store
-      console.log('📝 Creating negotiation offer...');
-      const negotiation = await createNegotiation(storeSlug, {
+  if (!message.trim()) {
+    toast({
+      title: 'Message Required',
+      description: 'Please tell the seller why they should accept your offer',
+      variant: 'destructive',
+    });
+    return;
+  }
+
+  try {
+    // Step 1: Create negotiation record
+    console.log('📝 Creating negotiation offer...');
+    const negotiation = await createNegotiation(storeSlug, {
+      productId: product._id,
+      productName: product.name,
+      originalPrice,
+      offerPrice: Number(offerPrice),
+      message: message.trim(),
+      customerName: customerName || 'Anonymous Customer',
+      customerEmail: customerEmail || 'contact@example.com',
+      customerPhone: customerPhone || 'Not provided',
+    });
+
+    console.log('✅ Negotiation created:', negotiation._id);
+
+    // Step 2: Create chat message with negotiation details
+    const chatMessage = `🤝 **NEGOTIATION OFFER**\n\n📦 Product: ${product.name}\n💰 Original Price: ₦${originalPrice.toLocaleString()}\n🎯 Your Offer: ₦${Number(offerPrice).toLocaleString()}\n💵 Your Discount: ₦${discount.toLocaleString()} (${discountPercent}%)\n\n📝 Message: ${message}\n\n🔗 Negotiation ID: ${negotiation._id}`;
+
+    console.log('💬 Creating chat with store owner...');
+    console.log('Store Owner ID:', storeOwnerId);
+    console.log('Store Slug:', storeSlug);
+    
+    // Create chat with the store owner
+    const chat = await createChat(
+      {
+        participantId: storeOwnerId,
+        participantType: 'client', // Important: use 'client' as the type
+        message: chatMessage,
         productId: product._id,
-        productName: product.name,
-        originalPrice,
-        offerPrice: Number(offerPrice),
-        message: message.trim(),
-        customerName: customerName || 'Anonymous Customer',
-        customerEmail: customerEmail || 'contact@example.com',
-        customerPhone: customerPhone || 'Not provided',
-      });
+        type: 'product', // Type of chat
+      },
+      'general' // Use 'general' context for now
+      // Don't pass storeSlug here as it's not needed for 'general' context
+    );
 
-      console.log('✅ Negotiation created:', negotiation._id);
+    console.log('✅ Chat created:', chat._id);
 
-      // Step 2: Open chat with store owner
-      console.log('💬 Opening chat with store owner...');
-      const chatMessage = `🤝 **NEGOTIATION OFFER**\n\n📦 Product: ${product.name}\n💰 Original Price: ₦${originalPrice.toLocaleString()}\n🎯 Your Offer: ₦${Number(offerPrice).toLocaleString()}\n💵 Your Discount: ₦${discount.toLocaleString()} (${discountPercent}%)\n\n📝 Message: ${message}`;
+    toast({
+      title: '🎉 Offer Sent Successfully!',
+      description: `Your ₦${discount.toLocaleString()} discount offer has been sent. The seller will respond in the chat.`,
+    });
 
-      await createChat(
-        {
-          participantId: storeOwnerId,
-          participantModel: 'Client',
-          message: chatMessage,
-          orderId: negotiation._id,
-        },
-        'store',
-        storeSlug
-      );
-
-      console.log('✅ Chat created and offer sent');
-
-      toast({
-        title: '🎉 Offer Sent Successfully!',
-        description: `Your ₦${discount.toLocaleString()} discount offer has been sent. The seller will respond in the chat.`,
-      });
-
-      handleReset();
-      onClose();
-    } catch (err: any) {
-      console.error('❌ Negotiation error:', err);
-      toast({
-        title: 'Error',
-        description: err.message || 'Failed to send offer',
-        variant: 'destructive',
-      });
-    }
-  };
+    handleReset();
+    onClose();
+  } catch (err: any) {
+    console.error('❌ Negotiation error - Full error:', err);
+    console.error('Error response:', err.response?.data);
+    console.error('Error status:', err.response?.status);
+    
+    toast({
+      title: 'Error',
+      description: err.message || err.response?.data?.message || 'Failed to send offer. Please try again.',
+      variant: 'destructive',
+    });
+  }
+};
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -183,21 +192,65 @@ export const NegotiationModal: React.FC<NegotiationModalProps> = ({
                 />
               </div>
 
+              {/* Price Suggestions */}
+              {originalPrice > 0 && (
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setOfferPrice(Math.floor(originalPrice * 0.7).toString())}
+                    className="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200"
+                  >
+                    30% off
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOfferPrice(Math.floor(originalPrice * 0.8).toString())}
+                    className="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200"
+                  >
+                    20% off
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOfferPrice(Math.floor(originalPrice * 0.9).toString())}
+                    className="text-xs px-2 py-1 bg-gray-100 rounded hover:bg-gray-200"
+                  >
+                    10% off
+                  </button>
+                </div>
+              )}
+
               {/* Discount Display */}
-              {offerPrice && (
-                <div className="mt-2 p-2 bg-yellow-50 rounded border border-yellow-200">
+              {offerPrice && Number(offerPrice) > 0 && (
+                <div className={`mt-2 p-2 rounded border ${
+                  Number(offerPrice) < originalPrice 
+                    ? 'bg-green-50 border-green-200' 
+                    : 'bg-red-50 border-red-200'
+                }`}>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-700">Your Offer:</span>
-                    <span className="font-bold text-yellow-600">
+                    <span className="font-bold text-blue-600">
                       ₦{Number(offerPrice).toLocaleString()}
                     </span>
                   </div>
                   {discount > 0 && (
-                    <div className="flex justify-between items-center mt-1">
-                      <span className="text-sm text-gray-700">You Save:</span>
-                      <span className="font-bold text-green-600">
-                        ₦{discount.toLocaleString()} ({discountPercent}%)
-                      </span>
+                    <>
+                      <div className="flex justify-between items-center mt-1">
+                        <span className="text-sm text-gray-700">You Save:</span>
+                        <span className="font-bold text-green-600">
+                          ₦{discount.toLocaleString()} ({discountPercent}%)
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center mt-1">
+                        <span className="text-sm text-gray-700">Final Price:</span>
+                        <span className="font-bold text-purple-600">
+                          ₦{offer.toLocaleString()}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                  {Number(offerPrice) >= originalPrice && (
+                    <div className="text-red-600 text-sm mt-1">
+                      ⚠️ Offer must be less than original price
                     </div>
                   )}
                 </div>
@@ -264,16 +317,16 @@ export const NegotiationModal: React.FC<NegotiationModalProps> = ({
               <Button
                 type="submit"
                 disabled={!isValidOffer || isSubmitting}
-                className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold"
+                className="flex-1 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-semibold"
               >
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Sending...
+                    Sending Offer...
                   </>
                 ) : (
                   <>
-                    📨 Send Offer
+                    📨 Send Negotiation Offer
                   </>
                 )}
               </Button>
