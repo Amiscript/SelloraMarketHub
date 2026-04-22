@@ -873,11 +873,25 @@ const updateCart = async (productId: string, quantity: number) => {
   }
 };
 
-  const handleCheckout = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!storeSlug) return;
 
+// In UserStorefront.tsx - Add this state and update handleCheckout
 
+const [isCheckingOut, setIsCheckingOut] = useState(false);
+
+const handleCheckout = async (e: React.FormEvent) => {
+  e.preventDefault();
+  
+  if (isCheckingOut) {
+    toast({ 
+      title: "Processing", 
+      description: "Please wait, your order is being processed...",
+    });
+    return;
+  }
+  
+  if (!storeSlug) return;
+
+  // Validate stock before proceeding
   const stockIssues = [];
   for (const item of cart?.items || []) {
     const product = products.find(p => p._id === item.product._id);
@@ -895,22 +909,60 @@ const updateCart = async (productId: string, quantity: number) => {
     return;
   }
 
+  // Validate required fields
+  if (!checkoutForm.name || !checkoutForm.phone || !checkoutForm.location) {
+    toast({ 
+      title: "Missing Information", 
+      description: "Please fill in all required fields (Name, Phone, Location)",
+      variant: "destructive" 
+    });
+    return;
+  }
 
-    try {
-      const result = await placeOrder(storeSlug, {
-        customer: { name: checkoutForm.name, phone: checkoutForm.phone, email: checkoutForm.email, location: checkoutForm.location },
-        shippingAddress: checkoutForm.address || checkoutForm.location,
-        shippingMethod: checkoutForm.shippingMethod,
-        notes: checkoutForm.notes,
+  setIsCheckingOut(true);
+  
+  try {
+    const result = await placeOrder(storeSlug, {
+      customer: { 
+        name: checkoutForm.name, 
+        phone: checkoutForm.phone, 
+        email: checkoutForm.email || `${checkoutForm.phone.replace(/\s/g, '')}@temp.com`,
+        location: checkoutForm.location 
+      },
+      shippingAddress: checkoutForm.address || checkoutForm.location,
+      shippingMethod: checkoutForm.shippingMethod,
+      notes: checkoutForm.notes,
+    });
+    
+    setOrderComplete(result);
+    setShowCheckout(false);
+    
+    if (result.paymentUrl) {
+      window.location.href = result.paymentUrl;
+    } else {
+      toast({ 
+        title: "Order Created", 
+        description: "Your order has been created. You will receive a confirmation email shortly." 
       });
-      setOrderComplete(result);
-      setShowCheckout(false);
-      if (result.paymentUrl) window.location.href = result.paymentUrl;
-    } catch (err: any) {
-      toast({ title: "Order failed", description: err.message, variant: "destructive" });
+      await fetchCart(storeSlug);
     }
-  };
-
+  } catch (err: any) {
+    console.error('Checkout error:', err);
+    
+    let errorMessage = err.message || "Something went wrong. Please try again.";
+    if (errorMessage.includes('Duplicate')) {
+      errorMessage = "An order is already being processed. Please wait a moment and try again.";
+    }
+    
+    toast({ 
+      title: "Order Failed", 
+      description: errorMessage,
+      variant: "destructive" 
+    });
+  } finally {
+    setIsCheckingOut(false);
+  }
+};
   const searchOrders = async () => {
     if (!orderSearch.trim() || !storeSlug) return;
     setOrdersLoading(true);

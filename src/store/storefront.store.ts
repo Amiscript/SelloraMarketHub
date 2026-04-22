@@ -1,4 +1,4 @@
-
+// store/storefront.store.ts
 import { create } from 'zustand';
 import { api } from '@/lib/api';
 import { AxiosError } from 'axios';
@@ -29,7 +29,7 @@ export interface StorefrontInfo {
   socialLinks?: { facebook?: string; instagram?: string; twitter?: string; linkedin?: string };
   seo?: { title?: string; description?: string };
   contact?: { enabled?: boolean; whatsappEnabled?: boolean };
-  owner?: { name?: string; phone?: string; whatsapp?: string };
+  owner?: { name?: string; phone?: string; whatsapp?: string; email?: string; address?: string };
   settings?: StorefrontSettings;
   isActive?: boolean;
   client?: string;
@@ -83,7 +83,7 @@ interface StorefrontState {
   fetchCart: (slug: string, sessionId?: string) => Promise<void>;
   refreshCart: (slug: string) => Promise<void>;
   manageCart: (slug: string, action: 'add' | 'remove' | 'update' | 'clear', productId?: string, quantity?: number) => Promise<void>;
-  placeOrder: (slug: string, orderData: any) => Promise<{ order: any; paymentUrl: string; reference: string }>;
+  placeOrder: (slug: string, orderData: any, retryCount?: number) => Promise<{ order: any; paymentUrl: string; reference: string }>;
   verifyPayment: (reference: string, orderId: string) => Promise<{ success: boolean; order?: any; error?: string }>;
   fetchClientSettings: () => Promise<void>;
   updateClientSettings: (data: Partial<StorefrontSettings>) => Promise<void>;
@@ -228,19 +228,28 @@ export const useStorefrontStore = create<StorefrontState>((set, get) => ({
     }
   },
 
-  placeOrder: async (slug, orderData) => {
+  placeOrder: async (slug, orderData, retryCount = 0) => {
     set({ isSubmitting: true, error: null });
     try {
       const storefrontRes = await api.get(`/api/v1/storefront/${slug}`);
-      const storefront = storefrontRes.data.data?.storefront;
-      const clientId = storefront?.client;
-
-      if (!clientId) {
-        throw new Error('Store not found');
+      const storefrontData = storefrontRes.data.data;
+      
+      let clientId;
+      if (storefrontData?.storefront?.client) {
+        clientId = storefrontData.storefront.client;
+      } else if (storefrontData?.client?._id) {
+        clientId = storefrontData.client._id;
+      } else if (storefrontData?.client) {
+        clientId = storefrontData.client;
+      } else if (storefrontData?._id && storefrontData?.storeName) {
+        clientId = storefrontData._id;
+      } else {
+        throw new Error('Store client not found');
       }
 
       const state = useStorefrontStore.getState();
       const cart = state.cart;
+      
       if (!cart?.items?.length) {
         throw new Error('Cart is empty');
       }
@@ -250,13 +259,24 @@ export const useStorefrontStore = create<StorefrontState>((set, get) => ({
         quantity: item.quantity,
       }));
       
-      const res = await api.post('/api/v1/orders', {
-        ...orderData,
-        clientId,
-        products,
-      });
+      const orderPayload = {
+        clientId: clientId,
+        customer: {
+          name: orderData.customer?.name,
+          phone: orderData.customer?.phone,
+          email: orderData.customer?.email || `${orderData.customer?.phone?.replace(/\s/g, '')}@temp.com`,
+          location: orderData.customer?.location,
+        },
+        products: products,
+        shippingMethod: orderData.shippingMethod || 'standard',
+        shippingAddress: orderData.shippingAddress || orderData.customer?.location,
+        notes: orderData.notes || '',
+      };
 
-      // Store order info for potential recovery
+      console.log('Placing order with payload:', JSON.stringify(orderPayload, null, 2));
+
+      const res = await api.post('/api/v1/orders', orderPayload);
+      
       const orderDataToStore = {
         orderId: res.data.order._id,
         reference: res.data.payment?.reference,
@@ -265,6 +285,8 @@ export const useStorefrontStore = create<StorefrontState>((set, get) => ({
       };
       sessionStorage.setItem('pendingOrder', JSON.stringify(orderDataToStore));
       
+      await get().manageCart(slug, 'clear');
+      
       set({ isSubmitting: false });
       
       return {
@@ -272,12 +294,24 @@ export const useStorefrontStore = create<StorefrontState>((set, get) => ({
         paymentUrl: res.data.payment?.authorization_url,
         reference: res.data.payment?.reference,
       };
-    } catch (err) {
-      const msg = err instanceof AxiosError
-        ? err.response?.data?.error || 'Failed to place order'
-        : (err as Error).message || 'Failed to place order';
-      set({ error: msg, isSubmitting: false });
-      throw new Error(msg);
+    } catch (err: any) {
+      console.error('Place order error:', err.response?.data || err.message);
+      
+      if (err.response?.data?.error?.includes('Duplicate') && retryCount < 2) {
+        console.log(`Retrying order (attempt ${retryCount + 1})...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return get().placeOrder(slug, orderData, retryCount + 1);
+      }
+      
+      let errorMessage = 'Failed to place order';
+      if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      set({ error: errorMessage, isSubmitting: false });
+      throw new Error(errorMessage);
     }
   },
 
@@ -287,7 +321,6 @@ export const useStorefrontStore = create<StorefrontState>((set, get) => ({
       const res = await api.post('/api/v1/orders/verify-payment', { reference, orderId });
       
       if (res.data.success) {
-        // Clear pending order after successful payment
         sessionStorage.removeItem('pendingOrder');
         set({ isLoading: false });
         return { success: true, order: res.data.order };

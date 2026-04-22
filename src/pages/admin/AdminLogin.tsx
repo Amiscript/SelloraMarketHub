@@ -17,11 +17,23 @@ const AdminLogin = () => {
     clearError();
 
     try {
-      await login({ email: formData.email, password: formData.password }, "admin");
-      toast({ title: "Login Successful", description: "Welcome back, Admin!" });
+      // Pass 'admin' role - this now accepts both 'admin' AND 'sub-admin'
+      const response = await login(
+        { email: formData.email, password: formData.password },
+        "admin"
+      );
+      
+      // Show success message
+      toast({ 
+        title: "Login Successful", 
+        description: response?.message || `Welcome back, ${response?.user?.name}!` 
+      });
+      
+      // Navigate to admin dashboard
       navigate("/admin/dashboard");
-    } catch {
-      // error shown below via store state
+    } catch (err: any) {
+      // Error is already handled by the store
+      console.error("Login error:", err.message);
     }
   };
 
@@ -70,6 +82,11 @@ const AdminLogin = () => {
             <p className="text-muted-foreground">
               Enter your credentials to access the admin dashboard
             </p>
+            <div className="mt-2 p-2 bg-primary/10 rounded-md">
+              <p className="text-xs text-primary text-center">
+                ✅ Admin and Sub-Admin accounts can both login here
+              </p>
+            </div>
           </div>
 
           {error && (
@@ -146,12 +163,17 @@ const AdminLogin = () => {
             </Button>
           </form>
 
-          <p className="mt-8 text-center text-muted-foreground">
-            Are you a client?{" "}
-            <Link to="/client/login" className="text-primary hover:underline font-medium">
-              Login here
-            </Link>
-          </p>
+          <div className="mt-6 text-center space-y-2">
+            <p className="text-sm text-muted-foreground">
+              <Link to="/sub-admin/login" className="text-primary hover:underline">
+                Sub-Admin Login
+              </Link>
+              <span className="mx-2">•</span>
+              <Link to="/client/login" className="text-primary hover:underline">
+                Client Login
+              </Link>
+            </p>
+          </div>
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-// store/authStore.ts
+
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import axios, { AxiosError, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
@@ -51,7 +51,6 @@ export interface LoginCredentials {
 }
 
 export interface RegisterClientData {
-  // Personal Information
   name: string;
   email: string;
   password: string;
@@ -62,16 +61,12 @@ export interface RegisterClientData {
   state: string;
   country: string;
   currentLocation: string;
-  
-  // Bank Details (optional)
   bankDetails?: {
     bankName: string;
     accountName: string;
     accountNumber: string;
     accountType: string;
   };
-  
-  // Grantor Information (optional)
   grantor?: {
     name: string;
     relationship: string;
@@ -80,8 +75,6 @@ export interface RegisterClientData {
     address?: string;
     occupation?: string;
   };
-  
-  // Store Information (optional)
   storeName?: string;
   storeDescription?: string;
 }
@@ -91,6 +84,8 @@ export interface LoginResponse {
   token?: string;
   user?: User;
   error?: string;
+  redirectUrl?: string;
+  message?: string;
 }
 
 export interface RegisterResponse {
@@ -142,12 +137,11 @@ export interface ApiErrorResponse {
   errors?: Array<{
     field: string;
     message: string;
-    value?: number | string ;
+    value?: number | string;
   }>;
 }
 
 export interface AuthState {
-  // State
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
@@ -156,8 +150,7 @@ export interface AuthState {
   validationErrors: Array<{ field: string; message: string }> | null;
   storeUrl: string | null;
 
-  // Actions
-  login: (credentials: LoginCredentials, role?: 'admin' | 'client') => Promise<void>;
+  login: (credentials: LoginCredentials, role?: 'admin' | 'sub-admin' | 'client') => Promise<LoginResponse>;
   registerClient: (data: RegisterClientData, files?: Record<string, File>) => Promise<RegisterResponse>;
   logout: () => Promise<void>;
   verifyEmail: (token: string) => Promise<boolean>;
@@ -168,14 +161,6 @@ export interface AuthState {
   clearError: () => void;
   clearValidationErrors: () => void;
   setAuthFromStorage: () => void;
-}
-
-// JWT Payload type
-interface JwtPayload {
-  id: string;
-  role: string;
-  exp: number;
-  iat: number;
 }
 
 // API Configuration
@@ -202,9 +187,9 @@ api.interceptors.response.use(
   (response: AxiosResponse) => response,
   (error: AxiosError<ApiErrorResponse>) => {
     if (error.response?.status === 401) {
-      // Clear auth state on unauthorized
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      localStorage.removeItem('role');
       window.location.href = '/client/login';
     }
     return Promise.reject(error);
@@ -215,7 +200,6 @@ api.interceptors.response.use(
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
-      // Initial state
       user: null,
       token: null,
       isAuthenticated: false,
@@ -224,7 +208,6 @@ export const useAuthStore = create<AuthState>()(
       validationErrors: null,
       storeUrl: null,
 
-      // Set auth from storage (called on app initialization)
       setAuthFromStorage: () => {
         const token = localStorage.getItem('token');
         const userStr = localStorage.getItem('user');
@@ -236,9 +219,7 @@ export const useAuthStore = create<AuthState>()(
               token,
               user,
               isAuthenticated: true,
-              storeUrl: user.storeSlug 
-                ? `/store/${user.storeSlug}`
-                : null,
+              storeUrl: user.storeSlug ? `/store/${user.storeSlug}` : null,
             });
           } catch (error) {
             console.error('Failed to parse user from storage');
@@ -248,8 +229,8 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      // Login
-      login: async (credentials: LoginCredentials, role: 'admin' | 'client' = 'client') => {
+      // FIXED: Login function with proper sub-admin support
+      login: async (credentials: LoginCredentials, role?: 'admin' | 'sub-admin' | 'client') => {
         set({ isLoading: true, error: null, validationErrors: null });
         
         try {
@@ -258,18 +239,30 @@ export const useAuthStore = create<AuthState>()(
           if (response.data.success && response.data.token && response.data.user) {
             const { token, user } = response.data;
             
-            // Validate role
-            if (role === 'admin' && user.role !== 'admin') {
-              throw new Error('Invalid admin credentials');
-            }
-            
-            if (role === 'client' && user.role !== 'client') {
-              throw new Error('Invalid client credentials');
+            // FIXED: Role validation - Allow sub-admin when admin role is requested
+            if (role) {
+              if (role === 'admin') {
+                // Allow both 'admin' AND 'sub-admin' to access admin portal
+                if (user.role !== 'admin' && user.role !== 'sub-admin') {
+                  throw new Error('Invalid admin credentials');
+                }
+              } else if (role === 'sub-admin') {
+                // Only allow 'sub-admin'
+                if (user.role !== 'sub-admin') {
+                  throw new Error('Invalid sub-admin credentials');
+                }
+              } else if (role === 'client') {
+                // Only allow 'client'
+                if (user.role !== 'client') {
+                  throw new Error('Invalid client credentials');
+                }
+              }
             }
             
             // Store in localStorage
             localStorage.setItem('token', token);
             localStorage.setItem('user', JSON.stringify(user));
+            localStorage.setItem('role', user.role);
             
             // Update state
             set({
@@ -277,10 +270,10 @@ export const useAuthStore = create<AuthState>()(
               user,
               isAuthenticated: true,
               isLoading: false,
-              storeUrl: user.storeSlug 
-                ? `/store/${user.storeSlug}`
-                : null,
+              storeUrl: user.storeSlug ? `/store/${user.storeSlug}` : null,
             });
+            
+            return response.data;
           } else {
             throw new Error(response.data.error || 'Login failed');
           }
@@ -292,7 +285,6 @@ export const useAuthStore = create<AuthState>()(
             const data = error.response.data;
             errorMessage = data.error || errorMessage;
             
-            // Handle validation errors array
             if (data.errors && Array.isArray(data.errors)) {
               validationErrors = data.errors.map(err => ({
                 field: err.field,
@@ -312,14 +304,12 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      // Register Client
       registerClient: async (data: RegisterClientData, files?: Record<string, File>) => {
         set({ isLoading: true, error: null, validationErrors: null });
         
         try {
           const formData = new FormData();
           
-          // Append all text fields
           (Object.keys(data) as Array<keyof RegisterClientData>).forEach((key) => {
             const value = data[key];
             if (value !== undefined && value !== null) {
@@ -331,7 +321,6 @@ export const useAuthStore = create<AuthState>()(
             }
           });
 
-          // Append files if provided (matching the field names expected by the backend)
           if (files) {
             Object.entries(files).forEach(([fieldName, file]) => {
               formData.append(fieldName, file);
@@ -355,9 +344,7 @@ export const useAuthStore = create<AuthState>()(
               user,
               isAuthenticated: true,
               isLoading: false,
-              storeUrl: storeUrl || (user.storeSlug 
-                ? `/store/${user.storeSlug}`
-                : null),
+              storeUrl: storeUrl || (user.storeSlug ? `/store/${user.storeSlug}` : null),
             });
 
             return response.data;
@@ -372,7 +359,6 @@ export const useAuthStore = create<AuthState>()(
             const data = error.response.data;
             errorMessage = data.error || errorMessage;
             
-            // Handle validation errors array
             if (data.errors && Array.isArray(data.errors)) {
               validationErrors = data.errors.map(err => ({
                 field: err.field,
@@ -392,7 +378,6 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      // Logout
       logout: async () => {
         set({ isLoading: true });
         
@@ -401,9 +386,9 @@ export const useAuthStore = create<AuthState>()(
         } catch (error: unknown) {
           console.error('Logout error:', error);
         } finally {
-          // Always clear local state
           localStorage.removeItem('token');
           localStorage.removeItem('user');
+          localStorage.removeItem('role');
           set({
             user: null,
             token: null,
@@ -416,7 +401,6 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      // Verify Email
       verifyEmail: async (token: string): Promise<boolean> => {
         set({ isLoading: true, error: null });
         
@@ -424,7 +408,6 @@ export const useAuthStore = create<AuthState>()(
           const response = await api.get<VerifyEmailResponse>(`/api/v1/auth/verify-email/${token}`);
           
           if (response.data.success) {
-            // Update user verification status in state if logged in
             const currentUser = get().user;
             if (currentUser) {
               const updatedUser = { ...currentUser, isVerified: true };
@@ -451,7 +434,6 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      // Forgot Password
       forgotPassword: async (email: string) => {
         set({ isLoading: true, error: null });
         
@@ -477,7 +459,6 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      // Reset Password
       resetPassword: async (token: string, password: string) => {
         set({ isLoading: true, error: null });
         
@@ -503,7 +484,6 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      // Get Current User
       getCurrentUser: async () => {
         set({ isLoading: true, error: null });
         
@@ -518,9 +498,7 @@ export const useAuthStore = create<AuthState>()(
               user,
               isAuthenticated: true,
               isLoading: false,
-              storeUrl: user.storeSlug 
-                ? `/store/${user.storeSlug}`
-                : null,
+              storeUrl: user.storeSlug ? `/store/${user.storeSlug}` : null,
             });
           } else {
             throw new Error('Failed to get user data');
@@ -534,9 +512,9 @@ export const useAuthStore = create<AuthState>()(
             errorMessage = error.message;
           }
           
-          // Clear auth if token is invalid
           localStorage.removeItem('token');
           localStorage.removeItem('user');
+          localStorage.removeItem('role');
           
           set({ 
             user: null, 
@@ -550,14 +528,12 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      // Update Profile - using PATCH /auth/update-profile
       updateProfile: async (data: Partial<User>, files?: Record<string, File>) => {
         set({ isLoading: true, error: null, validationErrors: null });
         
         try {
           const formData = new FormData();
           
-          // Append text fields
           (Object.keys(data) as Array<keyof User>).forEach((key) => {
             const value = data[key];
             if (value !== undefined && value !== null) {
@@ -569,7 +545,6 @@ export const useAuthStore = create<AuthState>()(
             }
           });
 
-          // Append files if provided
           if (files) {
             Object.entries(files).forEach(([fieldName, file]) => {
               formData.append(fieldName, file);
@@ -589,9 +564,7 @@ export const useAuthStore = create<AuthState>()(
             set({
               user: updatedUser,
               isLoading: false,
-              storeUrl: updatedUser.storeSlug 
-                ? `/store/${updatedUser.storeSlug}`
-                : null,
+              storeUrl: updatedUser.storeSlug ? `/store/${updatedUser.storeSlug}` : null,
             });
           } else {
             throw new Error(response.data.error || 'Profile update failed');
@@ -623,10 +596,7 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      // Clear Error
       clearError: () => set({ error: null }),
-      
-      // Clear Validation Errors
       clearValidationErrors: () => set({ validationErrors: null }),
     }),
     {
