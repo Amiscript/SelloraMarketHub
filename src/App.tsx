@@ -63,7 +63,7 @@ const App = () => (
           
           {/* Auth Routes (Shared) */}
           <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password/:token" element={<ResetPassword />} />
+         <Route path="/reset-password" element={<ResetPassword />} />
           
           {/* Admin Routes Group */}
           <Route path="/admin">
