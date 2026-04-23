@@ -152,168 +152,226 @@ export const useStorefrontStore = create<StorefrontState>((set, get) => ({
     }
   },
 
-  fetchCart: async (slug, sessionId) => {
-    try {
-      const params = sessionId ? `?sessionId=${sessionId}` : '';
-      const res = await api.get(`/api/v1/storefront/${slug}/cart${params}`);
-      const cartData = res.data.data;
-      
-      if (cartData && cartData.items) {
-        cartData.items = cartData.items.map((item: any) => ({
-          ...item,
-          product: {
-            ...item.product,
-            images: item.product.images || (item.product.image ? [{ url: item.product.image }] : [])
-          }
-        }));
-      }
-      
-      set({ cart: cartData || null });
-    } catch {
-      set({ cart: { items: [], total: 0, storeSlug: slug } });
-    }
-  },
+// In your storefront.store.ts, replace these three functions:
 
-  refreshCart: async (slug: string) => {
-    try {
-      const res = await api.get(`/api/v1/storefront/${slug}/cart`);
-      const cartData = res.data?.data;
-      if (cartData && cartData.items) {
-        cartData.items = cartData.items.map((item: any) => ({
-          ...item,
-          product: {
-            ...item.product,
-            images: item.product.images || (item.product.image ? [{ url: item.product.image }] : [])
-          }
-        }));
-      }
-      set({ cart: cartData || null });
-    } catch (error) {
-      console.error('Failed to refresh cart:', error);
-    }
-  },
-
-  manageCart: async (slug, action, productId, quantity = 1) => {
-    set({ isSubmitting: true, error: null });
-    try {
-      const response = await api.post(`/api/v1/storefront/${slug}/cart`, {
-        productId,
-        action,
-        quantity: action === 'add' ? quantity : (action === 'update' ? quantity : undefined)
-      });
-      
-      const updatedCart = response.data?.data;
-      
-      if (updatedCart) {
-        if (updatedCart.items) {
-          updatedCart.items = updatedCart.items.map((item: any) => ({
-            ...item,
-            product: {
-              ...item.product,
-              images: item.product.images || (item.product.image ? [{ url: item.product.image }] : [])
-            }
-          }));
+fetchCart: async (slug: string) => {
+  try {
+    const response = await api.get(`/api/v1/storefront/${slug}/cart`);
+    const cartData = response.data.data;
+    
+    if (cartData && cartData.items) {
+      cartData.items = cartData.items.map((item: any) => ({
+        ...item,
+        product: {
+          ...item.product,
+          images: item.product?.images || (item.image ? [{ url: item.image }] : []),
+          stock: item.product?.stock ?? 99
         }
-        set({ cart: updatedCart, isSubmitting: false });
-      } else {
-        await get().refreshCart(slug);
-        set({ isSubmitting: false });
-      }
-    } catch (err) {
-      const msg = err instanceof AxiosError 
-        ? err.response?.data?.message || err.response?.data?.error || 'Cart operation failed' 
-        : 'Cart operation failed';
-      set({ error: msg, isSubmitting: false });
-      throw new Error(msg);
-    }
-  },
-
-  placeOrder: async (slug, orderData, retryCount = 0) => {
-    set({ isSubmitting: true, error: null });
-    try {
-      const storefrontRes = await api.get(`/api/v1/storefront/${slug}`);
-      const storefrontData = storefrontRes.data.data;
-      
-      let clientId;
-      if (storefrontData?.storefront?.client) {
-        clientId = storefrontData.storefront.client;
-      } else if (storefrontData?.client?._id) {
-        clientId = storefrontData.client._id;
-      } else if (storefrontData?.client) {
-        clientId = storefrontData.client;
-      } else if (storefrontData?._id && storefrontData?.storeName) {
-        clientId = storefrontData._id;
-      } else {
-        throw new Error('Store client not found');
-      }
-
-      const state = useStorefrontStore.getState();
-      const cart = state.cart;
-      
-      if (!cart?.items?.length) {
-        throw new Error('Cart is empty');
-      }
-
-      const products = cart.items.map((item: any) => ({
-        productId: typeof item.product === 'string' ? item.product : item.product._id,
-        quantity: item.quantity,
       }));
-      
-      const orderPayload = {
-        clientId: clientId,
-        customer: {
-          name: orderData.customer?.name,
-          phone: orderData.customer?.phone,
-          email: orderData.customer?.email || `${orderData.customer?.phone?.replace(/\s/g, '')}@temp.com`,
-          location: orderData.customer?.location,
-        },
-        products: products,
-        shippingMethod: orderData.shippingMethod || 'standard',
-        shippingAddress: orderData.shippingAddress || orderData.customer?.location,
-        notes: orderData.notes || '',
-      };
-
-      console.log('Placing order with payload:', JSON.stringify(orderPayload, null, 2));
-
-      const res = await api.post('/api/v1/orders', orderPayload);
-      
-      const orderDataToStore = {
-        orderId: res.data.order._id,
-        reference: res.data.payment?.reference,
-        storeSlug: slug,
-        timestamp: Date.now(),
-      };
-      sessionStorage.setItem('pendingOrder', JSON.stringify(orderDataToStore));
-      
-      await get().manageCart(slug, 'clear');
-      
-      set({ isSubmitting: false });
-      
-      return {
-        order: res.data.order,
-        paymentUrl: res.data.payment?.authorization_url,
-        reference: res.data.payment?.reference,
-      };
-    } catch (err: any) {
-      console.error('Place order error:', err.response?.data || err.message);
-      
-      if (err.response?.data?.error?.includes('Duplicate') && retryCount < 2) {
-        console.log(`Retrying order (attempt ${retryCount + 1})...`);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        return get().placeOrder(slug, orderData, retryCount + 1);
-      }
-      
-      let errorMessage = 'Failed to place order';
-      if (err.response?.data?.error) {
-        errorMessage = err.response.data.error;
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-      
-      set({ error: errorMessage, isSubmitting: false });
-      throw new Error(errorMessage);
     }
-  },
+    
+    set({ cart: cartData || { items: [], total: 0, storeSlug: slug } });
+    return cartData;
+  } catch (error) {
+    console.error('Fetch cart error:', error);
+    set({ cart: { items: [], total: 0, storeSlug: slug } });
+    return null;
+  }
+},
+
+refreshCart: async (slug: string) => {
+  try {
+    const response = await api.get(`/api/v1/storefront/${slug}/cart`);
+    const cartData = response.data?.data;
+    if (cartData && cartData.items) {
+      cartData.items = cartData.items.map((item: any) => ({
+        ...item,
+        product: {
+          ...item.product,
+          images: item.product?.images || (item.image ? [{ url: item.image }] : []),
+          stock: item.product?.stock ?? 99
+        }
+      }));
+    }
+    set({ cart: cartData || null });
+    return cartData;
+  } catch (error) {
+    console.error('Failed to refresh cart:', error);
+    return null;
+  }
+},
+
+manageCart: async (slug: string, action: string, productId?: string, quantity: number = 1) => {
+  set({ isSubmitting: true, error: null });
+  try {
+    const response = await api.post(`/api/v1/storefront/${slug}/cart`, {
+      productId,
+      action,
+      quantity: action === 'add' ? quantity : (action === 'update' ? quantity : undefined)
+    });
+    
+    const updatedCart = response.data?.data;
+    
+    if (updatedCart) {
+      if (updatedCart.items) {
+        updatedCart.items = updatedCart.items.map((item: any) => ({
+          ...item,
+          product: {
+            ...item.product,
+            images: item.product?.images || (item.image ? [{ url: item.image }] : []),
+            stock: item.product?.stock ?? 99
+          }
+        }));
+      }
+      set({ cart: updatedCart, isSubmitting: false });
+    } else {
+      await get().refreshCart(slug);
+      set({ isSubmitting: false });
+    }
+    
+    return updatedCart;
+  } catch (err) {
+    const msg = err instanceof AxiosError 
+      ? err.response?.data?.message || err.response?.data?.error || 'Cart operation failed' 
+      : 'Cart operation failed';
+    set({ error: msg, isSubmitting: false });
+    throw new Error(msg);
+  }
+},
+
+ // store/storefront.store.ts - Updated placeOrder function
+
+placeOrder: async (slug, orderData, retryCount = 0) => {
+  set({ isSubmitting: true, error: null });
+  try {
+    // First, get the store client ID
+    const storefrontRes = await api.get(`/api/v1/storefront/${slug}`);
+    const storefrontData = storefrontRes.data.data;
+    
+    let clientId;
+    if (storefrontData?.storefront?.client) {
+      clientId = storefrontData.storefront.client;
+    } else if (storefrontData?.client?._id) {
+      clientId = storefrontData.client._id;
+    } else if (storefrontData?.client) {
+      clientId = storefrontData.client;
+    } else if (storefrontData?._id && storefrontData?.storeName) {
+      clientId = storefrontData._id;
+    } else {
+      throw new Error('Store client not found');
+    }
+
+    const state = useStorefrontStore.getState();
+    const cart = state.cart;
+    
+    if (!cart?.items?.length) {
+      throw new Error('Cart is empty');
+    }
+
+    // Format products correctly - ensure each product has required fields
+    const products = cart.items.map((item: any) => {
+      const productId = typeof item.product === 'string' ? item.product : item.product._id;
+      if (!productId) {
+        throw new Error(`Product ID missing for ${item.product.name}`);
+      }
+      if (!item.quantity || item.quantity < 1) {
+        throw new Error(`Invalid quantity for ${item.product.name}`);
+      }
+      return {
+        productId: productId,
+        quantity: Number(item.quantity),
+      };
+    });
+
+    // Ensure customer email is provided (required by backend)
+    const customerEmail = orderData.customer?.email?.trim();
+    const customerPhone = orderData.customer?.phone?.trim();
+    
+    // Backend requires email - generate from phone if not provided
+    let finalEmail = customerEmail;
+    if (!finalEmail && customerPhone) {
+      // Remove spaces and special characters for email generation
+      const cleanPhone = customerPhone.replace(/[\s\+\(\)\-]/g, '');
+      finalEmail = `${cleanPhone}@temp.com`;
+    }
+    if (!finalEmail) {
+      finalEmail = `customer${Date.now()}@temp.com`;
+    }
+
+    const orderPayload = {
+      clientId: clientId,
+      customer: {
+        name: orderData.customer?.name?.trim() || '',
+        phone: customerPhone || '',
+        email: finalEmail,
+        location: orderData.customer?.location?.trim() || '',
+      },
+      products: products,
+      shippingMethod: orderData.shippingMethod || 'standard',
+      shippingAddress: orderData.shippingAddress?.trim() || orderData.customer?.location?.trim() || '',
+      notes: orderData.notes || '',
+    };
+
+    // Validate required fields before sending
+    const validationErrors = [];
+    if (!orderPayload.clientId) validationErrors.push('clientId is required');
+    if (!orderPayload.customer.name) validationErrors.push('customer name is required');
+    if (!orderPayload.customer.phone) validationErrors.push('customer phone is required');
+    if (!orderPayload.customer.location) validationErrors.push('customer location is required');
+    if (!orderPayload.products || orderPayload.products.length === 0) validationErrors.push('products are required');
+    
+    if (validationErrors.length > 0) {
+      console.error('Validation errors:', validationErrors);
+      throw new Error(`Validation failed: ${validationErrors.join(', ')}`);
+    }
+
+    console.log('Placing order with payload:', JSON.stringify(orderPayload, null, 2));
+
+    const res = await api.post('/api/v1/orders', orderPayload);
+    
+    const orderDataToStore = {
+      orderId: res.data.order._id,
+      reference: res.data.payment?.reference,
+      storeSlug: slug,
+      timestamp: Date.now(),
+    };
+    sessionStorage.setItem('pendingOrder', JSON.stringify(orderDataToStore));
+    
+    // Clear cart after successful order
+    await get().manageCart(slug, 'clear');
+    
+    set({ isSubmitting: false });
+    
+    return {
+      order: res.data.order,
+      paymentUrl: res.data.payment?.authorization_url,
+      reference: res.data.payment?.reference,
+    };
+  } catch (err: any) {
+    console.error('Place order error:', err.response?.data || err.message);
+    
+    // Handle duplicate order error with retry
+    if (err.response?.data?.error?.includes('Duplicate') && retryCount < 2) {
+      console.log(`Retrying order (attempt ${retryCount + 1})...`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      return get().placeOrder(slug, orderData, retryCount + 1);
+    }
+    
+    let errorMessage = 'Failed to place order';
+    if (err.response?.data?.error) {
+      errorMessage = err.response.data.error;
+      // If there are details, include them
+      if (err.response.data.details) {
+        errorMessage += `: ${err.response.data.details.join(', ')}`;
+      }
+    } else if (err.message) {
+      errorMessage = err.message;
+    }
+    
+    set({ error: errorMessage, isSubmitting: false });
+    throw new Error(errorMessage);
+  }
+},
 
   verifyPayment: async (reference: string, orderId: string) => {
     set({ isLoading: true });
